@@ -482,14 +482,23 @@ def clean_cuerpo(text):
     return text.strip()
 
 def normalize_title_for_comparison(title):
+    """
+    Normaliza el título de forma estricta, removiendo tildes usando unidecode y
+    eliminando sufijos descriptivos o fuentes externas para agrupamientos precisos.
+    """
     if not isinstance(title, str): 
         return ""
-    cleaned = re.sub(r"\s+[\|–—-]\s+[^\|–—-]+$", "", title).strip()
+    # 1. Quitar tildes (ej: Séptima -> septima, séptima -> septima)
+    cleaned = unidecode(title).strip()
+    # 2. Remover fuentes externas finales (" | El Tiempo", " - Caracol", etc.)
+    cleaned = re.sub(r"\s+[\|–—-]\s+[^\|–—-]+$", "", cleaned).strip()
+    # 3. Remover prefijos descriptivos de lugar/tag (ej: "Cundinamarca: ...")
     if ":" in cleaned:
         parts = cleaned.split(":", 1)
         suffix = parts[1].strip()
         if len(suffix) >= 10:
             cleaned = suffix
+    # 4. Pasar a minúsculas y omitir caracteres no alfanuméricos
     return re.sub(r"\W+", " ", cleaned).lower().strip()
 
 def clean_title_for_output(title):
@@ -570,6 +579,39 @@ def limpiar_mencion(mencion_str):
     cleaned = re.sub(r'(?i)\bLa\s+Cardio\s+26\s*-\s*', '', mencion_str)
     return cleaned.strip()
 
+# ======================================
+# Filtro de Titulares de Última Hora / Genéricos
+# ======================================
+def es_titular_generico(titulo: str) -> bool:
+    """
+    Verifica localmente si un titular contiene cadenas comunes de resúmenes diarios,
+    titulares sin contexto o de última hora para clasificarlos directamente.
+    """
+    if not titulo: return False
+    t = unidecode(str(titulo).lower())
+    patrones = [
+        r"titulares\s+de\s+hoy",
+        r"titulares\s+del\s+dia",
+        r"titulares\s+ultima\s+hora",
+        r"ultima\s+hora",
+        r"resumen\s+de\s+noticias",
+        r"las\s+noticias\s+de\s+hoy",
+        r"noticias\s+del\s+dia",
+        r"lo\s+que\s+debe\s+saber",
+        r"boletin\s+de\s+noticias",
+        r"titulares\s+de\s+la\s+manana",
+        r"titulares\s+de\s+la\s+tarde",
+        r"titulares\s+de\s+la\s+noche",
+        r"titulares\s+de\s+prensa",
+        r"resumen\s+informativo",
+        r"titulares\s+de\s+noticias",
+        r"titulares\s+de\s+ultima\s+hora"
+    ]
+    for p in patrones:
+        if re.search(p, t):
+            return True
+    return False
+
 
 # ======================================
 # Estructuras de Datos Avanzadas
@@ -613,6 +655,10 @@ def agrupar_textos_similares(textos, umbral):
     return dict(enumerate(g.values()))
 
 def agrupar_por_titulo_similar(titulos):
+    """
+    Agrupa títulos homólogos basándose en un umbral relajado para unidecode.
+    Garantiza que variaciones de tildes o mayúsculas se mapeen al mismo ID de grupo de título.
+    """
     gid, grupos, used = 0, {}, set()
     norm = [normalize_title_for_comparison(t) for t in titulos]
     for i in range(len(norm)):
@@ -621,11 +667,11 @@ def agrupar_por_titulo_similar(titulos):
         used.add(i)
         for j in range(i + 1, len(norm)):
             if j in used or not norm[j]: continue
-            if SequenceMatcher(None, norm[i], norm[j]).ratio() >= SIMILARITY_THRESHOLD_TITULOS:
+            if norm[i] == norm[j] or SequenceMatcher(None, norm[i], norm[j]).ratio() >= 0.88:
                 grp.append(j)
                 used.add(j)
-        if len(grp) >= 2:
-            grupos[gid] = list(set(grp))
+        if len(grp) >= 1:
+            grupos[gid] = grp
             gid += 1
     return grupos
 
@@ -691,7 +737,7 @@ class ClasificadorNoticiasInteligente:
         async with sem:
             marca_target = str(marca_especifica).strip() if (marca_especifica and str(marca_especifica).strip() not in ("", "nan", "N/A", "-")) else self.marca_principal
             
-            # Si el texto de la noticia no contiene mención explícita o implícita de la marca evaluada, devolvemos valores por defecto neutros
+            # Si el texto de la noticia no contiene mención de la marca evaluada, devolvemos valores por defecto neutros
             if not self._menciona_marca(texto, marca_target):
                 return {
                     "tono": "Neutro",
@@ -700,35 +746,33 @@ class ClasificadorNoticiasInteligente:
                 }
 
             prompt = (
-                f"Eres un analista experto de reputación, prensa y posicionamiento de marcas en el sector salud de Colombia.\n"
+                f"Eres un experto analista de reputación, prensa y posicionamiento de marcas en el sector salud de Colombia.\n"
                 f"Tu tarea consiste en realizar un análisis de prensa inteligente, contextual y de alta precisión para la marca '{marca_target}' en la siguiente noticia.\n\n"
                 f"TEXTO DE LA NOTICIA a evaluar:\n{texto[:1800]}\n\n"
                 f"ENTIDAD BAJO ANÁLISIS EN ESTE CASO:\n'{marca_target}'\n\n"
                 f"--- INSTRUCCIONES DE ENFOQUE CRÍTICO (FUNDAMENTAL) ---\n"
                 f"Tu análisis debe centrarse de manera estricta en la marca '{marca_target}' y en CÓMO se le asocia en la noticia.\n"
-                f"Por ejemplo, si la noticia aborda un logro de innovación médica general, pero la entidad '{marca_target}' NO es la que realiza el avance (o sólo se la menciona de forma tangencial o contextual), la narrativa de esta fila NO debe ser 'Innovación + Desarrollo' sino 'Otras'. Sé analítico, preciso y contextual.\n\n"
+                f"Por ejemplo, si la noticia aborda un logro de innovación médica general de un competidor, pero la entidad '{marca_target}' NO es la que realiza el avance, la narrativa de esta fila NO debe ser 'Innovación + Desarrollo' sino 'Otras'. Sé analítico, preciso y contextual.\n\n"
                 f"1. TONO DE REPUTACIÓN (En relación directa con '{marca_target}'):\n"
                 f"Evalúa cómo afecta el artículo a la imagen de '{marca_target}':\n"
                 f"- Positivo: Reconocimientos, premios, aportes científicos, expansión o hitos que beneficien la imagen corporativa de '{marca_target}'.\n"
                 f"- Negativo: Demandas penales o civiles, fallas clínicas u operativas, crisis institucionales, investigaciones o reclamaciones directas contra '{marca_target}'.\n"
                 f"- Neutro: Menciones secundarias, informativas de contexto sectorial o de pasillo sin connotación reputacional directa.\n\n"
-                f"2. CATEGORÍA (Grado de involucramiento institucional):\n"
-                f"Clasifica en una de las siguientes opciones según el rol de la noticia:\n"
-                f"- Sucesos: Hechos fortuitos, policiales o de orden público que ocurren donde se asocia a la marca (ej. heridos que ingresan por urgencias) pero que son ajenos a sus metas estratégicas. Ej: 'Heridos en la balacera en Usaquén'.\n"
-                f"- Core: Servicios o iniciativas del eje de negocio principal: Cardiovascular y trasplantes. Clasifica aquí únicamente si '{marca_target}' es el protagonista del área cardiovascular.\n"
-                f"- Especialidades: Otras áreas o especialidades clínicas (neurología, pediatría, oncología, etc.) vinculadas directamente a la marca. Ej: 'Enfermedades neurológicas'.\n"
-                f"- Ranking: Posicionamiento en mediciones de prestigio corporativo, reputación o rankings sectoriales. Ej: América Economía, Merco o P&M.\n"
-                f"- Sector: Asuntos del contexto general de la salud (problemas con las EPS, crisis financiera general, embargos sectoriales, carencia de medicamentos) que afectan a la marca de manera macro o contextual.\n"
-                f"- Reforma: Lineamientos normativos, debates parlamentarios o proyectos de ley de salud que reestructuran el sistema general de salud.\n"
-                f"- Corporativo: Acciones comerciales, institucionales, convenios académicos, asambleas corporativas, alianzas o eventos propios (ej. 'Latidos Futuros').\n\n"
-                f"3. NARRATIVAS (Rol del mensaje estratégico de '{marca_target}'):\n"
-                f"Clasifica en una narrativa de acuerdo con el enfoque que la noticia proyecta sobre '{marca_target}':\n"
-                f"- Sostenibilidad: Programas sociales, ambientales, brigadas médicas, apoyo a la comunidad vulnerable, donaciones de libros u otros fines de propósito social.\n"
-                f"- Excelencia médica: Acreditaciones nacionales o internacionales (Joint Commission International), experticia de especialistas, casos de alta complejidad o calidad médica certificada.\n"
-                f"- Innovación + Desarrollo: Innovación tecnológica, inversión en equipamientos de última generación, descubrimientos científicos o publicaciones científicas (ej. Nature Index) por parte de '{marca_target}'.\n"
-                f"- Marca empleadora: Logros de los profesionales internos, perfiles de médicos, reconocimientos al personal clínico y bienestar de colaboradores de '{marca_target}'.\n"
-                f"- Portafolio: Promoción directa de servicios médicos preventivos, chequeos de salud ejecutivos, pautas publicitarias o consejos prácticos de prevención.\n"
-                f"- Otras: Notas meramente referenciales, marketing sensorial o noticias donde no aplica ninguno de los pilares anteriores.\n\n"
+                f"2. CATEGORÍA (Involucramiento institucional - Escribe exactamente uno de estos nombres):\n"
+                f"- Sucesos: Acciones que ocurren en donde aparece mi marca, pero no se encuentran ligados a mi objetivo de negocio. Ej: Heridos en la balacera en Usaquén, accidentes de tránsito.\n"
+                f"- Core: Servicios direccionados a la estrategia de negocio cardiovascular y trasplantes (exclusivo para cuando involucra cardiovascular/trasplante en '{marca_target}'). Ej: Síntomas de un infarto.\n"
+                f"- Especialidades: Todas las otras especialidades médicas que se ofrecen en LaCardio (neurología, pediatría, etc.). Ej: Enfermedades neurológicas.\n"
+                f"- Ranking: Menciones en las diferentes rankings, mediciones de reputación o escalafones. Ej: Top de las marcas colombianas P&M.\n"
+                f"- Sector: Las menciones que se relacionan al sector salud en general, embargos, problemas de EPS o aspectos noticiosos que LaCardio debe tener en cuenta. Ej: Crisis en el sector salud.\n"
+                f"- Reforma: Las menciones que van relacionadas a los lineamientos normativos que ocurren en el entorno y por los cuales la marca puede verse afectada (reforma a la salud, leyes, etc.). Ej: Activan la reforma de salud.\n"
+                f"- Corporativo: Acciones que ocurren de la marca en donde corresponde a participaciones, reconocimientos o menciones como resultados de una alianza, asambleas o asocio corporativo. Ej: Encuentro Latidos Futuros 4.\n\n"
+                f"3. NARRATIVAS (Rol del mensaje estratégico - Escribe exactamente uno de estos nombres):\n"
+                f"- Sostenibilidad: Contenido relacionado a las acciones de sostenibilidad, voluntariado y propósito social. Ej: Donaciones de libros - Filbo 2026.\n"
+                f"- Excelencia médica: Contenido relacionado con la experticia médica en las diferentes áreas de servicio, acreditaciones y calidad. Ej: Reacreditación de la Joint Commission International.\n"
+                f"- Innovación + Desarrollo: Contenido relacionado con novedades, investigación, apertura de servicios, innovación en equipos y tratamientos realizados por '{marca_target}'. Ej: Producción científica Nature Index 2025.\n"
+                f"- Marca empleadora: Contenido relacionado a las acciones, bienestar, perfiles y logros de nuestros colaboradores. Ej: Jaime Fernandez, reconocido médico es orgullo cardio.\n"
+                f"- Portafolio: Contenido relacionado con los diferentes servicios médicos generales o consejos de hábitos saludables. Ej: Beneficios de la actividad física.\n"
+                f"- Otras: Contenido relacionado con los diferentes servicios médicos pero de carácter puramente referencial, marketing sensorial o menciones secundarias. Ej: Referencial, Marketing sensorial.\n\n"
                 f"Genera estrictamente un objeto JSON plano sin introducciones ni marcas de formato secundarias, exactamente de esta forma:\n"
                 f'{{"tono": "Positivo|Negativo|Neutro", '
                 f'"categoria": "Sucesos|Core|Especialidades|Ranking|Sector|Reforma|Corporativo", '
@@ -775,25 +819,19 @@ class ClasificadorNoticiasInteligente:
         n = len(textos)
         txts = textos.tolist()
         
-        pbar.progress(0.05, "Agrupando noticias por similitud para consistencia absoluta...")
-        txts_emb = [texto_para_embedding(str(titulos.iloc[i]), str(resumenes.iloc[i])) for i in range(n)]
-        dsu = DSU(n)
+        pbar.progress(0.05, "Agrupando estrictamente por títulos para consistencia absoluta de metadatos...")
         
-        # Agrupar títulos similares y resúmenes para garantizar idéntico análisis de metadatos
-        for g in [agrupar_textos_similares(txts_emb, SIMILARITY_THRESHOLD_TONO), agrupar_por_titulo_similar(titulos.tolist())]:
-            for _, idxs in g.items():
-                for j in idxs[1:]: dsu.union(idxs[0], j)
-                
-        grupos_dsu = dsu.grupos(n)
+        # 1. Agrupamiento exclusivo basado en similitud estricta del Título (unidecode + lower)
+        grupos_titulos = agrupar_por_titulo_similar(titulos.tolist())
         
-        # Agrupar por la tupla (DsuRoot, MencionNormalizada)
-        # Esto asegura que noticias idénticas/similares referidas a la misma marca obtengan exactamente el mismo Tono, Categoría y Narrativas.
+        # 2. Agrupar por combinación (GrupoTítuloId, MencionNormalizada)
+        # Esto asegura de forma absoluta que noticias similares con la misma marca hereden idéntico análisis de metadatos
         grupos_por_mencion = defaultdict(list)
-        for cid, idxs in grupos_dsu.items():
+        for gid, idxs in grupos_titulos.items():
             for idx in idxs:
                 menc = str(menciones.iloc[idx]).strip()
                 menc_norm = norm_key(menc)
-                grupos_por_mencion[(cid, menc_norm)].append(idx)
+                grupos_por_mencion[(gid, menc_norm)].append(idx)
                 
         sem = asyncio.Semaphore(CONCURRENT_REQUESTS)
         llaves_subgrupo = list(grupos_por_mencion.keys())
@@ -803,18 +841,39 @@ class ClasificadorNoticiasInteligente:
             idxs = grupos_por_mencion[k]
             rep_idx, rep_txt = seleccionar_representante(idxs, txts)
             menc_especifica = str(menciones.iloc[rep_idx]).strip()
-            reps_mencion.append((rep_txt, menc_especifica))
+            rep_titulo = str(titulos.iloc[rep_idx]).strip()
+            reps_mencion.append((rep_txt, menc_especifica, rep_titulo))
             
-        tasks = [self._analizar_llm(txt, menc, sem) for txt, menc in reps_mencion]
+        tasks = []
+        pre_clasificados = {}
+        
+        # Validación de Titular Genérico/Última Hora de forma local antes de invocar la API
+        for idx, (txt, menc, r_title) in enumerate(reps_mencion):
+            key = llaves_subgrupo[idx]
+            if es_titular_generico(r_title):
+                pre_clasificados[key] = {
+                    "tono": "Neutro",
+                    "categoria": "Sucesos",
+                    "narrativa": "Otras"
+                }
+            else:
+                tasks.append((key, self._analizar_llm(txt, menc, sem)))
+                
         rl = []
-        
-        for i, f in enumerate(asyncio.as_completed(tasks)):
-            rl.append(await f)
-            pbar.progress(0.1 + 0.85 * (i + 1) / max(len(tasks), 1), f"Analizando noticias {i + 1}/{len(tasks)}")
+        if tasks:
+            keys_to_call, coros = zip(*tasks)
+            for i, f in enumerate(asyncio.as_completed(coros)):
+                rl.append(await f)
+                pbar.progress(0.1 + 0.85 * (i + 1) / max(len(coros), 1), f"Analizando noticias {i + 1}/{len(coros)}")
+                
+            rpg = {keys_to_call[i]: rl[i] for i in range(len(keys_to_call))}
+        else:
+            rpg = {}
             
-        rpg = {llaves_subgrupo[i]: r for i, r in enumerate(rl)}
-        final = [None] * n
+        # Unir pre-clasificaciones locales y llamados a la API de OpenAI
+        rpg.update(pre_clasificados)
         
+        final = [None] * n
         for k, idxs in grupos_por_mencion.items():
             r = rpg.get(k, {"tono": "Neutro", "categoria": "Sector", "narrativa": "Otras"})
             
@@ -822,7 +881,7 @@ class ClasificadorNoticiasInteligente:
                 t_val = titulos.iloc[i]
                 r_val = resumenes.iloc[i]
                 
-                # Reglas locales de apoyo heurístico
+                # Reglas locales de apoyo heurístico ante defaults
                 rule_cat, rule_nar = self._clasificar_con_reglas_locales(t_val, r_val)
                 cat_final = r.get("categoria")
                 nar_final = r.get("narrativa")
@@ -1091,7 +1150,7 @@ def read_and_normalize_dossier(sheet, region_map, internet_map):
     menciones_grafica = df.get('Empresa rel.', pd.Series([''] * len(df))).fillna('').astype(str).apply(clean_text)
     df['Menciones - Empresa'] = np.where(is_av, menciones_av, np.where(is_grafica, menciones_grafica, menciones_av))
 
-    # Aplicar limpieza de menciones (ej: quitar prefijo de "La Cardio 26 - ")
+    # Aplicar la limpieza del prefijo "La Cardio 26 - "
     df['Menciones - Empresa'] = df['Menciones - Empresa'].apply(limpiar_mencion)
 
     return df
