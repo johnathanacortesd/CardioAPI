@@ -18,7 +18,7 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.cluster import AgglomerativeClustering
 import json
-import asyncio
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 from typing import List, Dict, Tuple, Optional, Any
 import joblib
@@ -448,16 +448,6 @@ def call_with_retries(fn, *a, **kw):
             time.sleep(d)
             d *= 2
 
-async def acall_with_retries(fn, *a, **kw):
-    d = 1
-    for att in range(3):
-        try:
-            return await fn(*a, **kw)
-        except Exception as e:
-            if att == 2: raise e
-            await asyncio.sleep(d)
-            d *= 2
-
 def norm_key(text):
     if text is None: return ""
     return re.sub(r"[^a-z0-9]+", "", unidecode(str(text).strip().lower()))
@@ -732,8 +722,7 @@ def get_embeddings_batch(textos, batch_size=100):
 
 
 # ======================================
-# ANALIZADOR INTELIGENTE UNIFICADO
-# (Evaluación de Tono, Categoría y Narrativa de forma contextual por Marca)
+# ANALIZADOR INTELIGENTE UNIFICADO - MULTI-HILOS ESTABLE (ThreadPoolExecutor)
 # ======================================
 class ClasificadorNoticiasInteligente:
     def __init__(self, marca_principal, aliases):
@@ -748,89 +737,91 @@ class ClasificadorNoticiasInteligente:
             return m in t
         return any(n in t for n in self._all_names)
 
-    async def _analizar_llm(self, texto, marca_especifica, sem):
-        async with sem:
-            marca_target = str(marca_especifica).strip() if (marca_especifica and str(marca_especifica).strip() not in ("", "nan", "N/A", "-")) else self.marca_principal
+    def _analizar_llm_sync(self, texto, marca_especifica):
+        """Llamada síncrona a la API de OpenAI, ideal para ejecución segura en ThreadPoolExecutor."""
+        marca_target = str(marca_especifica).strip() if (marca_especifica and str(marca_especifica).strip() not in ("", "nan", "N/A", "-")) else self.marca_principal
+        
+        # Si el texto de la noticia no contiene mención de la marca evaluada, devolvemos valores por defecto neutros
+        if not self._menciona_marca(texto, marca_target):
+            return {
+                "tono": "Neutro",
+                "categoria": "Sector",
+                "narrativa": "Otras"
+            }
+
             
-            # Si el texto de la noticia no contiene mención de la marca evaluada, devolvemos valores por defecto neutros
-            if not self._menciona_marca(texto, marca_target):
-                return {
-                    "tono": "Neutro",
-                    "categoria": "Sector",
-                    "narrativa": "Otras"
-                }
+        prompt = (
+            f"Eres un experto analista de reputación, prensa y posicionamiento de marcas en el sector salud de Colombia.\n"
+            f"Tu tarea consiste en realizar un análisis de prensa inteligente, contextual y de alta precisión para la marca '{marca_target}' en la siguiente noticia.\n\n"
+            f"TEXTO DE LA NOTICIA a evaluar:\n{texto[:1800]}\n\n"
+            f"ENTIDAD BAJO ANÁLISIS EN ESTE CASO:\n'{marca_target}'\n\n"
+            f"--- INSTRUCCIONES DE ENFOQUE CRÍTICO (FUNDAMENTAL) ---\n"
+            f"Tu análisis debe centrarse de manera estricta en la marca '{marca_target}' y en CÓMO se le asocia en la noticia.\n"
+            f"Por ejemplo, si la noticia aborda un logro de innovación médica general de un competidor, pero la entidad '{marca_target}' NO es la que realiza el avance, la narrativa de esta fila NO debe ser 'Innovación + Desarrollo' sino 'Otras'. Sé analítico, preciso y contextual.\n\n"
+            f"1. TONO DE REPUTACIÓN (En relación directa con '{marca_target}'):\n"
+            f"Evalúa cómo afecta el artículo a la imagen de '{marca_target}':\n"
+            f"- Positivo: Reconocimientos, premios, aportes científicos, expansión o hitos que beneficien la imagen corporativa de '{marca_target}'.\n"
+            f"- Negativo: Demandas penales o civiles, fallas clínicas u operativas, crisis institucionales, investigaciones o reclamaciones directas contra '{marca_target}'.\n"
+            f"- Neutro: Menciones secundarias, informativas de contexto sectorial o de pasillo sin connotación reputacional directa.\n\n"
+            f"2. CATEGORÍA (Involucramiento institucional - Escribe exactamente uno de estos nombres):\n"
+            f"- Sucesos: Acciones que ocurren en donde aparece mi marca, pero no se encuentran ligados a mi objetivo de negocio. Ej: Heridos en la balacera en Usaquén, cierres viales u obras viales donde se asocia la marca por cercanía.\n"
+            f"- Core: Servicios direccionados a mi estrategia de negocio cardiovascular y trasplantes (exclusivo para cuando involucra cardiovascular/trasplante en '{marca_target}'). Ej: Síntomas de un infarto.\n"
+            f"- Especialidades: Todas las otras especialidades médicas que se ofrecen en LaCardio (neurología, pediatría, etc.). Ej: Enfermedades neurológicas.\n"
+            f"- Ranking: Menciones en las diferentes rankings, mediciones de reputación o escalafones. Ej: Top de las marcas colombianas P&M.\n"
+            f"- Sector: Las menciones que se relacionan al sector salud en general, embargos, problemas de EPS o aspectos noticiosos que LaCardio debe tener en cuenta. Ej: Crisis en el sector salud.\n"
+            f"- Reforma: Las menciones que van relacionadas a los lineamientos normativos que ocurren en el entorno y por los cuales la marca puede verse afectada (reforma a la salud, leyes, etc.). Ej: Activan la reforma de salud.\n"
+            f"- Corporativo: Acciones que ocurren de la marca en donde corresponde a participaciones, reconocimientos o menciones como resultados de una alianza, asambleas o asocio corporativo. Ej: Encuentro Latidos Futuros 4.\n\n"
+            f"3. NARRATIVAS (Rol del mensaje estratégico - Escribe exactamente uno de estos nombres):\n"
+            f"- Sostenibilidad: Contenido relacionado a las acciones de sostenibilidad, voluntariado y propósito social. Ej: Donaciones de libros - Filbo 2026.\n"
+            f"- Excelencia médica: Contenido relacionado con la experticia médica en las diferentes áreas de servicio, acreditaciones y calidad. Ej: Reacreditación de la Joint Commission International.\n"
+            f"- Innovación + Desarrollo: Contenido relacionado con novedades, investigación, apertura de servicios, innovación en equipos y tratamientos realizados por '{marca_target}'. Ej: Para todo avance tecnológico clínico que lidere activamente la marca.\n"
+            f"- Marca empleadora: Contenido relacionado a las acciones, bienestar, perfiles y logros de nuestros colaboradores. Ej: Jaime Fernandez, reconocido médico es orgullo cardio.\n"
+            f"- Portafolio: Contenido relacionado con los diferentes servicios médicos generales o consejos de hábitos saludables. Ej: Beneficios de la actividad física.\n"
+            f"- Otras: Contenido relacionado con los diferentes servicios médicos pero de carácter puramente referencial, marketing sensorial o menciones secundarias. Ej: Referencial, Marketing sensorial.\n\n"
+            f"Genera estrictamente un objeto JSON plano sin introducciones ni marcas de formato secundarias, exactamente de esta forma:\n"
+            f'{{"tono": "Positivo|Negativo|Neutro", '
+            f'"categoria": "Sucesos|Core|Especialidades|Ranking|Sector|Reforma|Corporativo", '
+            f'"narrativa": "Sostenibilidad|Excelencia médica|Innovación + Desarrollo|Marca empleadora|Portafolio|Otras"}}'
+        )
 
-            prompt = (
-                f"Eres un experto analista de reputación, prensa y posicionamiento de marcas en el sector salud de Colombia.\n"
-                f"Tu tarea consiste en realizar un análisis de prensa inteligente, contextual y de alta precisión para la marca '{marca_target}' en la siguiente noticia.\n\n"
-                f"TEXTO DE LA NOTICIA a evaluar:\n{texto[:1800]}\n\n"
-                f"ENTIDAD BAJO ANÁLISIS EN ESTE CASO:\n'{marca_target}'\n\n"
-                f"--- INSTRUCCIONES DE ENFOQUE CRÍTICO (FUNDAMENTAL) ---\n"
-                f"Tu análisis debe centrarse de manera estricta en la marca '{marca_target}' y en CÓMO se le asocia en la noticia.\n"
-                f"Por ejemplo, si la noticia aborda un logro de innovación médica general de un competidor, pero la entidad '{marca_target}' NO es la que realiza el avance, la narrativa de esta fila NO debe ser 'Innovación + Desarrollo' sino 'Otras'. Sé analítico, preciso y contextual.\n\n"
-                f"1. TONO DE REPUTACIÓN (En relación directa con '{marca_target}'):\n"
-                f"Evalúa cómo afecta el artículo a la imagen de '{marca_target}':\n"
-                f"- Positivo: Reconocimientos, premios, aportes científicos, expansión o hitos que beneficien la imagen corporativa de '{marca_target}'.\n"
-                f"- Negativo: Demandas penales o civiles, fallas clínicas u operativas, crisis institucionales, investigaciones o reclamaciones directas contra '{marca_target}'.\n"
-                f"- Neutro: Menciones secundarias, informativas de contexto sectorial o de pasillo sin connotación reputacional directa.\n\n"
-                f"2. CATEGORÍA (Involucramiento institucional - Escribe exactamente uno de estos nombres):\n"
-                f"- Sucesos: Acciones que ocurren en donde aparece mi marca, pero no se encuentran ligados a mi objetivo de negocio. Ej: Heridos en la balacera en Usaquén, cierres viales u obras viales donde se asocia la marca por cercanía.\n"
-                f"- Core: Servicios direccionados a mi estrategia de negocio cardiovascular y trasplantes (exclusivo para cuando involucra cardiovascular/trasplante en '{marca_target}'). Ej: Síntomas de un infarto.\n"
-                f"- Especialidades: Todas las otras especialidades médicas que se ofrecen en LaCardio (neurología, pediatría, etc.). Ej: Enfermedades neurológicas.\n"
-                f"- Ranking: Menciones en las diferentes rankings, mediciones de reputación o escalafones. Ej: Top de las marcas colombianas P&M.\n"
-                f"- Sector: Las menciones que se relacionan al sector salud en general, embargos, problemas de EPS o aspectos noticiosos que LaCardio debe tener en cuenta. Ej: Crisis en el sector salud.\n"
-                f"- Reforma: Las menciones que van relacionadas a los lineamientos normativos que ocurren en el entorno y por los cuales la marca puede verse afectada (reforma a la salud, leyes, etc.). Ej: Activan la reforma de salud.\n"
-                f"- Corporativo: Acciones que ocurren de la marca en donde corresponde a participaciones, reconocimientos o menciones como resultados de una alianza, asambleas o asocio corporativo. Ej: Encuentro Latidos Futuros 4.\n\n"
-                f"3. NARRATIVAS (Rol del mensaje estratégico - Escribe exactamente uno de estos nombres):\n"
-                f"- Sostenibilidad: Contenido relacionado a las acciones de sostenibilidad, voluntariado y propósito social. Ej: Donaciones de libros - Filbo 2026.\n"
-                f"- Excelencia médica: Contenido relacionado con la experticia médica en las diferentes áreas de servicio, acreditaciones y calidad. Ej: Reacreditación de la Joint Commission International.\n"
-                f"- Innovación + Desarrollo: Contenido relacionado con novedades, investigación, apertura de servicios, innovación en equipos y tratamientos realizados por '{marca_target}'. Ej: Producción científica Nature Index 2025.\n"
-                f"- Marca empleadora: Contenido relacionado a las acciones, bienestar, perfiles y logros de nuestros colaboradores. Ej: Jaime Fernandez, reconocido médico es orgullo cardio.\n"
-                f"- Portafolio: Contenido relacionado con los diferentes servicios médicos generales o consejos de hábitos saludables. Ej: Beneficios de la actividad física.\n"
-                f"- Otras: Contenido relacionado con los diferentes servicios médicos pero de carácter puramente referencial, marketing sensorial o menciones secundarias. Ej: Referencial, Marketing sensorial.\n\n"
-                f"Genera estrictamente un objeto JSON plano sin introducciones ni marcas de formato secundarias, exactamente de esta forma:\n"
-                f'{{"tono": "Positivo|Negativo|Neutro", '
-                f'"categoria": "Sucesos|Core|Especialidades|Ranking|Sector|Reforma|Corporativo", '
-                f'"narrativa": "Sostenibilidad|Excelencia médica|Innovación + Desarrollo|Marca empleadora|Portafolio|Otras"}}'
+        try:
+            resp = call_with_retries(
+                openai.ChatCompletion.create,
+                model=OPENAI_MODEL_CLASIFICACION,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=60,
+                temperature=0.0,
+                response_format={"type": "json_object"}
             )
+            
+            u = resp.get('usage', {}) if isinstance(resp, dict) else getattr(resp, 'usage', {})
+            if u:
+                st.session_state['tokens_input'] += (u.get('prompt_tokens') if isinstance(u, dict) else getattr(u, 'prompt_tokens', 0)) or 0
+                st.session_state['tokens_output'] += (u.get('completion_tokens') if isinstance(u, dict) else getattr(u, 'completion_tokens', 0)) or 0
+            
+            resultado = json.loads(resp.choices[0].message.content)
+            tono = str(resultado.get("tono", "Neutro")).strip().title()
+            cat = str(resultado.get("categoria", "Sector")).strip().title()
+            nar = str(resultado.get("narrativa", "Otras")).strip()
+            
+            valid_tonos = {"Positivo", "Negativo", "Neutro"}
+            valid_cats = {"Sucesos", "Core", "Especialidades", "Ranking", "Sector", "Reforma", "Corporativo"}
+            valid_nars = {"Sostenibilidad", "Excelencia médica", "Innovación + Desarrollo", "Marca empleadora", "Portafolio", "Otras"}
+            
+            if tono not in valid_tonos: tono = "Neutro"
+            if cat not in valid_cats: cat = "Sector"
+            if nar not in valid_nars:
+                if "innovacion" in nar.lower() or "desarrollo" in nar.lower(): nar = "Innovación + Desarrollo"
+                elif "excelencia" in nar.lower(): nar = "Excelencia médica"
+                elif "marca" in nar.lower() or "empleador" in nar.lower(): nar = "Marca empleadora"
+                else: nar = "Otras"
+                
+            return {"tono": tono, "categoria": cat, "narrativa": nar}
+        except Exception:
+            return {"tono": "Neutro", "categoria": "Sector", "narrativa": "Otras"}
 
-            try:
-                resp = await acall_with_retries(
-                    openai.ChatCompletion.acreate,
-                    model=OPENAI_MODEL_CLASIFICACION,
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=60,
-                    temperature=0.0,
-                    response_format={"type": "json_object"}
-                )
-                
-                u = resp.get('usage', {}) if isinstance(resp, dict) else getattr(resp, 'usage', {})
-                if u:
-                    st.session_state['tokens_input'] += (u.get('prompt_tokens') if isinstance(u, dict) else getattr(u, 'prompt_tokens', 0)) or 0
-                    st.session_state['tokens_output'] += (u.get('completion_tokens') if isinstance(u, dict) else getattr(u, 'completion_tokens', 0)) or 0
-                
-                resultado = json.loads(resp.choices[0].message.content)
-                tono = str(resultado.get("tono", "Neutro")).strip().title()
-                cat = str(resultado.get("categoria", "Sector")).strip().title()
-                nar = str(resultado.get("narrativa", "Otras")).strip()
-                
-                valid_tonos = {"Positivo", "Negativo", "Neutro"}
-                valid_cats = {"Sucesos", "Core", "Especialidades", "Ranking", "Sector", "Reforma", "Corporativo"}
-                valid_nars = {"Sostenibilidad", "Excelencia médica", "Innovación + Desarrollo", "Marca empleadora", "Portafolio", "Otras"}
-                
-                if tono not in valid_tonos: tono = "Neutro"
-                if cat not in valid_cats: cat = "Sector"
-                if nar not in valid_nars:
-                    if "innovacion" in nar.lower() or "desarrollo" in nar.lower(): nar = "Innovación + Desarrollo"
-                    elif "excelencia" in nar.lower(): nar = "Excelencia médica"
-                    elif "marca" in nar.lower() or "empleador" in nar.lower(): nar = "Marca empleadora"
-                    else: nar = "Otras"
-                    
-                return {"tono": tono, "categoria": cat, "narrativa": nar}
-            except Exception:
-                return {"tono": "Neutro", "categoria": "Sector", "narrativa": "Otras"}
-
-    async def procesar_lote_async(self, textos, pbar, resumenes, titulos, menciones):
+    def procesar_lote(self, textos, pbar, resumenes, titulos, menciones):
+        """Procesa el lote usando ThreadPoolExecutor nativo, asegurando estabilidad total en Streamlit."""
         n = len(textos)
         txts = textos.tolist()
         
@@ -848,7 +839,6 @@ class ClasificadorNoticiasInteligente:
                 menc_norm = norm_key(menc)
                 grupos_por_mencion[(gid, menc_norm)].append(idx)
                 
-        sem = asyncio.Semaphore(CONCURRENT_REQUESTS)
         llaves_subgrupo = list(grupos_por_mencion.keys())
         
         reps_mencion = []
@@ -859,34 +849,37 @@ class ClasificadorNoticiasInteligente:
             rep_titulo = str(titulos.iloc[rep_idx]).strip()
             reps_mencion.append((rep_txt, menc_especifica, rep_titulo))
             
-        tasks = []
-        pre_clasificados = {}
+        rpg = {}
+        subgrupos_a_evaluar = []
         
         # Validación de Titular Genérico/Última Hora de forma local antes de invocar la API
         for idx, (txt, menc, r_title) in enumerate(reps_mencion):
             key = llaves_subgrupo[idx]
             if es_titular_generico(r_title):
-                pre_clasificados[key] = {
+                rpg[key] = {
                     "tono": "Neutro",
                     "categoria": "Sucesos",
                     "narrativa": "Otras"
                 }
             else:
-                tasks.append((key, self._analizar_llm(txt, menc, sem)))
+                subgrupos_a_evaluar.append((key, txt, menc))
                 
-        rl = []
-        if tasks:
-            keys_to_call, coros = zip(*tasks)
-            for i, f in enumerate(asyncio.as_completed(coros)):
-                rl.append(await f)
-                pbar.progress(0.1 + 0.85 * (i + 1) / max(len(coros), 1), f"Analizando noticias {i + 1}/{len(coros)}")
+        # Llamadas en paralelo síncronas usando ThreadPoolExecutor (Seguridad ante bucles de Streamlit)
+        if subgrupos_a_evaluar:
+            with ThreadPoolExecutor(max_workers=15) as executor:
+                futures_to_key = {
+                    executor.submit(self._analizar_llm_sync, txt, menc): key 
+                    for key, txt, menc in subgrupos_a_evaluar
+                }
                 
-            rpg = {keys_to_call[i]: rl[i] for i in range(len(keys_to_call))}
-        else:
-            rpg = {}
-            
-        # Unir pre-clasificaciones locales y llamados a la API de OpenAI
-        rpg.update(pre_clasificados)
+                total_tareas = len(futures_to_key)
+                for i, future in enumerate(as_completed(futures_to_key)):
+                    key = futures_to_key[future]
+                    try:
+                        rpg[key] = future.result()
+                    except Exception:
+                        rpg[key] = {"tono": "Neutro", "categoria": "Sector", "narrativa": "Otras"}
+                    pbar.progress(0.1 + 0.85 * (i + 1) / total_tareas, f"Analizando noticias {i + 1}/{total_tareas}")
         
         final = [None] * n
         for k, idxs in grupos_por_mencion.items():
@@ -907,7 +900,7 @@ class ClasificadorNoticiasInteligente:
             if nar_final == "Otras" and rule_nar and rule_nar != "Otras":
                 nar_final = rule_nar
                 
-            # Asignar de manera estrictamente idéntica a todos los miembros del subgrupo
+            # Asignar de manera estrictamente idéntica a todos los miembros del subgrupo (Garantiza consistencia absoluta)
             for i in idxs:
                 final[i] = {
                     "tono": r.get("tono"),
@@ -1270,9 +1263,9 @@ def generate_output_excel(rows, km):
 
 
 # ======================================
-# Proceso principal (Análisis Completo)
+# Proceso principal (Análisis Completo - Ejecución síncrona sin asyncio.run)
 # ======================================
-async def run_full_process_async(df_file, bn, ba, tpkl, epkl, mode, xlsx_bytes=None, cliente="", voceros="", enable_scraping=False):
+def run_full_process(df_file, bn, ba, tpkl, epkl, mode, xlsx_bytes=None, cliente="", voceros="", enable_scraping=False):
     st.session_state.update({'tokens_input': 0, 'tokens_output': 0, 'tokens_embedding': 0})
     get_embedding_cache().clear()
     t0 = time.time()
@@ -1280,7 +1273,6 @@ async def run_full_process_async(df_file, bn, ba, tpkl, epkl, mode, xlsx_bytes=N
     if "API" in mode:
         try:
             openai.api_key=st.secrets["OPENAI_API_KEY"]
-            openai.aiosession.set(None)
         except:
             st.error("OPENAI_API_KEY no encontrado en st.secrets.")
             st.stop()
@@ -1373,7 +1365,7 @@ async def run_full_process_async(df_file, bn, ba, tpkl, epkl, mode, xlsx_bytes=N
             if "API" in mode:
                 # El análisis inteligente unificado evalúa tono, categoría y narrativa
                 # de forma integrada por cada combinación de contenido + mención de marca única
-                resultados_analisis = await ClasificadorNoticiasInteligente(bn, ba).procesar_lote_async(
+                resultados_analisis = ClasificadorNoticiasInteligente(bn, ba).procesar_lote(
                     df["_txt"], pb, df[km["resumen"]], df[km["titulo"]], df[km["menciones"]]
                 )
                 df[km["tonoiai"]] = [r["tono"] for r in resultados_analisis]
@@ -1410,9 +1402,9 @@ async def run_full_process_async(df_file, bn, ba, tpkl, epkl, mode, xlsx_bytes=N
 
 
 # ======================================
-# Análisis Rápido
+# Análisis Rápido (Síncrono)
 # ======================================
-async def run_quick_async(df, tc, sc, bn, al):
+def run_quick(df, tc, sc, bn, al):
     st.session_state.update({'tokens_input': 0, 'tokens_output': 0, 'tokens_embedding': 0})
     get_embedding_cache().clear()
     
@@ -1431,7 +1423,7 @@ async def run_quick_async(df, tc, sc, bn, al):
         
     with st.status("Análisis Contextual Integrado", expanded=True) as s:
         pb = st.progress(0)
-        res = await ClasificadorNoticiasInteligente(bn, al).procesar_lote_async(
+        res = ClasificadorNoticiasInteligente(bn, al).procesar_lote(
             df["_txt"], pb, df[sc].fillna(''), df[tc].fillna(''), menciones_col
         )
         df['Tono IA'] = [r["tono"] for r in res]
@@ -1502,15 +1494,12 @@ def render_quick_tab():
                 else:
                     try:
                         openai.api_key = st.secrets["OPENAI_API_KEY"]
-                        openai.aiosession.set(None)
                     except:
                         st.error("OPENAI_API_KEY no encontrada.")
                         st.stop()
                     al = [a.strip() for a in bat.split(";") if a.strip()]
                     with st.spinner("Procesando..."):
-                        st.session_state.quick_result = asyncio.run(
-                            run_quick_async(st.session_state.quick_df.copy(), tc, sc, bn, al)
-                        )
+                        st.session_state.quick_result = run_quick(st.session_state.quick_df.copy(), tc, sc, bn, al)
                     st.rerun()
         if st.button("Otro archivo"):
             for k in ('quick_df', 'quick_name', 'quick_result', 'quick_cost'):
@@ -1582,9 +1571,9 @@ def main():
                     else:
                         al = [a.strip() for a in bat.split(";") if a.strip()]
                         cur_mode = st.session_state.get("mode", "API de OpenAI")
-                        asyncio.run(run_full_process_async(f1, bn, al, None, None, cur_mode,
-                                                         xlsx_bytes=None, cliente="", voceros="",
-                                                         enable_scraping=False))
+                        run_full_process(f1, bn, al, None, None, cur_mode,
+                                         xlsx_bytes=None, cliente="", voceros="",
+                                         enable_scraping=False)
                         st.rerun()
         else:
             total = st.session_state.total_rows
