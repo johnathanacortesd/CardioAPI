@@ -656,18 +656,33 @@ def agrupar_textos_similares(textos, umbral):
 
 def agrupar_por_titulo_similar(titulos):
     """
-    Agrupa títulos homólogos basándose en un umbral relajado para unidecode.
-    Garantiza que variaciones de tildes o mayúsculas se mapeen al mismo ID de grupo de título.
+    Agrupa títulos homólogos basándose en un algoritmo que combina correspondencia
+    estricta unidecode y similitud Jaccard de tokens.
     """
     gid, grupos, used = 0, {}, set()
     norm = [normalize_title_for_comparison(t) for t in titulos]
+    
+    def son_similares(s1, s2):
+        if not s1 or not s2: return False
+        if s1 == s2: return True
+        # Ratio de SequenceMatcher
+        seq_ratio = SequenceMatcher(None, s1, s2).ratio()
+        if seq_ratio >= 0.85: return True
+        
+        # Jaccard de palabras
+        w1, w2 = set(s1.split()), set(s2.split())
+        if w1 and w2:
+            jaccard = len(w1 & w2) / len(w1 | w2)
+            if jaccard >= 0.80: return True
+        return False
+
     for i in range(len(norm)):
         if i in used or not norm[i]: continue
         grp = [i]
         used.add(i)
         for j in range(i + 1, len(norm)):
             if j in used or not norm[j]: continue
-            if norm[i] == norm[j] or SequenceMatcher(None, norm[i], norm[j]).ratio() >= 0.88:
+            if son_similares(norm[i], norm[j]):
                 grp.append(j)
                 used.add(j)
         if len(grp) >= 1:
@@ -759,8 +774,8 @@ class ClasificadorNoticiasInteligente:
                 f"- Negativo: Demandas penales o civiles, fallas clínicas u operativas, crisis institucionales, investigaciones o reclamaciones directas contra '{marca_target}'.\n"
                 f"- Neutro: Menciones secundarias, informativas de contexto sectorial o de pasillo sin connotación reputacional directa.\n\n"
                 f"2. CATEGORÍA (Involucramiento institucional - Escribe exactamente uno de estos nombres):\n"
-                f"- Sucesos: Acciones que ocurren en donde aparece mi marca, pero no se encuentran ligados a mi objetivo de negocio. Ej: Heridos en la balacera en Usaquén, accidentes de tránsito.\n"
-                f"- Core: Servicios direccionados a la estrategia de negocio cardiovascular y trasplantes (exclusivo para cuando involucra cardiovascular/trasplante en '{marca_target}'). Ej: Síntomas de un infarto.\n"
+                f"- Sucesos: Acciones que ocurren en donde aparece mi marca, pero no se encuentran ligados a mi objetivo de negocio. Ej: Heridos en la balacera en Usaquén, cierres viales u obras viales donde se asocia la marca por cercanía.\n"
+                f"- Core: Servicios direccionados a mi estrategia de negocio cardiovascular y trasplantes (exclusivo para cuando involucra cardiovascular/trasplante en '{marca_target}'). Ej: Síntomas de un infarto.\n"
                 f"- Especialidades: Todas las otras especialidades médicas que se ofrecen en LaCardio (neurología, pediatría, etc.). Ej: Enfermedades neurológicas.\n"
                 f"- Ranking: Menciones en las diferentes rankings, mediciones de reputación o escalafones. Ej: Top de las marcas colombianas P&M.\n"
                 f"- Sector: Las menciones que se relacionan al sector salud en general, embargos, problemas de EPS o aspectos noticiosos que LaCardio debe tener en cuenta. Ej: Crisis en el sector salud.\n"
@@ -821,7 +836,7 @@ class ClasificadorNoticiasInteligente:
         
         pbar.progress(0.05, "Agrupando estrictamente por títulos para consistencia absoluta de metadatos...")
         
-        # 1. Agrupamiento exclusivo basado en similitud estricta del Título (unidecode + lower)
+        # 1. Agrupamiento exclusivo basado en similitud estricta del Título (unidecode + lower + Jaccard de palabras)
         grupos_titulos = agrupar_por_titulo_similar(titulos.tolist())
         
         # 2. Agrupar por combinación (GrupoTítuloId, MencionNormalizada)
@@ -877,20 +892,23 @@ class ClasificadorNoticiasInteligente:
         for k, idxs in grupos_por_mencion.items():
             r = rpg.get(k, {"tono": "Neutro", "categoria": "Sector", "narrativa": "Otras"})
             
+            # Obtener metadatos base evaluados del representante del subgrupo
+            rep_idx = idxs[0]
+            t_rep = titulos.iloc[rep_idx]
+            r_rep = resumenes.iloc[rep_idx]
+            
+            # Aplicar reglas locales heurísticas una única vez sobre el representante del grupo
+            rule_cat, rule_nar = self._clasificar_con_reglas_locales(t_rep, r_rep)
+            cat_final = r.get("categoria")
+            nar_final = r.get("narrativa")
+            
+            if cat_final == "Sector" and rule_cat in ("Core", "Especialidades", "Ranking", "Reforma", "Sucesos", "Corporativo"):
+                cat_final = rule_cat
+            if nar_final == "Otras" and rule_nar and rule_nar != "Otras":
+                nar_final = rule_nar
+                
+            # Asignar de manera estrictamente idéntica a todos los miembros del subgrupo
             for i in idxs:
-                t_val = titulos.iloc[i]
-                r_val = resumenes.iloc[i]
-                
-                # Reglas locales de apoyo heurístico ante defaults
-                rule_cat, rule_nar = self._clasificar_con_reglas_locales(t_val, r_val)
-                cat_final = r.get("categoria")
-                nar_final = r.get("narrativa")
-                
-                if cat_final == "Sector" and rule_cat in ("Core", "Especialidades", "Ranking", "Reforma", "Sucesos", "Corporativo"):
-                    cat_final = rule_cat
-                if nar_final == "Otras" and rule_nar and rule_nar != "Otras":
-                    nar_final = rule_nar
-                    
                 final[i] = {
                     "tono": r.get("tono"),
                     "categoria": cat_final,
