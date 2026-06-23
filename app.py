@@ -580,7 +580,7 @@ def limpiar_mencion(mencion_str):
     return cleaned.strip()
 
 # ======================================
-# Filtro de Titulares de Última Hora / Genéricos
+# Filtro de Titulares de Última Hora / Genéricos y No Salud
 # ======================================
 def es_titular_generico(titulo: str) -> bool:
     """
@@ -605,10 +605,37 @@ def es_titular_generico(titulo: str) -> bool:
         r"titulares\s+de\s+prensa",
         r"resumen\s+informativo",
         r"titulares\s+de\s+noticias",
-        r"titulares\s+de\s+ultima\s+hora"
+        r"titulares\s+de\s+ultima\s+hora",
+        r"noticias\s+en\s+60\s+segundos"
     ]
     for p in patrones:
         if re.search(p, t):
+            return True
+    return False
+
+def es_noticia_no_salud(titulo: str) -> bool:
+    """
+    Identifica de forma local noticias que traten exclusivamente de accidentes, obras, cierres
+    viales, nacimientos, abogados o temas sin relación con salud médica / reputación hospitalaria.
+    """
+    if not titulo: return False
+    t = unidecode(str(titulo).lower())
+    
+    # Palabras clave de eventos ajenos a salud en el título
+    palabras_clave = [
+        "cierre", "obras", "corredor verde", "septima", "séptima", "calle", "via", "vía", 
+        "accidente", "choque", "volcamiento", "nacimiento", "abogado", "transito", "tránsito",
+        "movilidad", "desvío", "desvio", "pavimentacion", "pavimentación", "embotellamiento"
+    ]
+    
+    if any(kw in t for kw in palabras_clave):
+        # Aseguramos que no existan excepciones médicas en el título que sí requieran análisis de salud
+        excepciones_salud = [
+            "cirugia", "cirugía", "medico", "médico", "doctor", "tratamiento", "clinica", "clínica", 
+            "hospital", "salud", "cardio", "trasplante", "paciente", "oncologia", "oncología", 
+            "neurologia", "neurología", "acreditacion", "acreditación"
+        ]
+        if not any(ex in t for ex in excepciones_salud):
             return True
     return False
 
@@ -741,11 +768,49 @@ class ClasificadorNoticiasInteligente:
         self._all_names = [self.marca_principal.lower()] + [a.lower() for a in self.aliases]
 
     def _menciona_marca(self, texto, marca_especifica):
+        """
+        Detecta la presencia de marcas con lógica de sinónimos inteligente
+        (ej: FCV <=> Cardiovascular, La Cardio <=> CardioInfantil, Country <=> Clínica del Country).
+        """
         t = unidecode(texto.lower())
         m = unidecode(str(marca_especifica).lower().strip()) if marca_especifica else ""
-        if m and m not in ("", "nan", "n/a", "none", "-"):
-            return m in t
-        return any(n in t for n in self._all_names)
+        if not m or m in ("nan", "n/a", "none", "-"):
+            return any(n in t for n in self._all_names)
+            
+        # Diccionario de grupos de sinónimos de marcas comunes para homologar la detección de menciones
+        sinonimos_marcas = {
+            "cardiovascular": ["cardiovascular", "fcv", "fundacion cardiovascular", "clinica cardiovascular"],
+            "fcv": ["cardiovascular", "fcv", "fundacion cardiovascular", "clinica cardiovascular"],
+            "country": ["country", "clinica del country", "clínica del country"],
+            "la cardio": ["la cardio", "lacardio", "cardioinfantil", "cardio infantil", "fundacion cardioinfantil"],
+            "cardioinfantil": ["la cardio", "lacardio", "cardioinfantil", "cardio infantil", "fundacion cardioinfantil"],
+            "cardio infantil": ["la cardio", "lacardio", "cardioinfantil", "cardio infantil", "fundacion cardioinfantil"]
+        }
+        
+        # Evaluar coincidencia de sinónimos si la marca corresponde a uno de los grupos definidos
+        for canon, grupo in sinonimos_marcas.items():
+            if canon in m:
+                if any(syn in t for syn in grupo):
+                    return True
+                    
+        return m in t
+
+    def _es_relevancia_positiva_salud(self, titulo, resumen) -> bool:
+        """
+        Detecta localmente palabras clave del sector salud que denotan alta excelencia,
+        logros, cirugías exitosas, avances o premios para guiar el tono hacia 'Positivo'.
+        """
+        t_r = unidecode((str(titulo) + " " + str(resumen)).lower())
+        indicadores = [
+            "acreditacion", "acreditación", "certificacion", "certificación", "reconocimiento",
+            "reconocida", "reconocido", "premio", "galardon", "galardón", "hilo", "hito",
+            "innovacion", "innovación", "innovadoras", "innovadora", "innovador", "innovadores",
+            "avance", "avances", "tecnologia", "tecnología", "cirugia", "cirugía", "operacion", "operación",
+            "procedimiento exitoso", "pionero", "pionera", "mejor clinica", "mejor clínica",
+            "ranking", "escalafon", "escalafón", "exito", "éxito", "trasplante", "salva vidas",
+            "primer puesto", "lider", "líder", "destaca", "destacan"
+        ]
+        return any(ind in t_r for ind in indicadores)
 
     def _analizar_llm_sync(self, texto, marca_especifica):
         """Llamada síncrona a la API de OpenAI, ideal para ejecución segura en ThreadPoolExecutor."""
@@ -769,13 +834,13 @@ class ClasificadorNoticiasInteligente:
             f"Por ejemplo, si la noticia aborda un logro de innovación médica general de un competidor, pero la entidad '{marca_target}' NO es la que realiza el avance, la narrativa de esta fila NO debe ser 'Innovación + Desarrollo' sino 'Otras'. Sé analítico, preciso y contextual.\n\n"
             f"1. TONO DE REPUTACIÓN (En relación directa con '{marca_target}'):\n"
             f"Evalúa cómo afecta el artículo a la imagen de '{marca_target}':\n"
-            f"- Positivo: Reconocimientos, premios, aportes científicos, expansión o hitos que beneficien la imagen corporativa de '{marca_target}'.\n"
-            f"- Negativo: Demandas penales o civiles, fallas clínicas u operativas, crisis institucionales, investigaciones o reclamaciones directas contra '{marca_target}'.\n"
-            f"- Neutro: Menciones secundarias, informativas de contexto sectorial o de pasillo sin connotación reputacional directa.\n\n"
+            f"- Positivo: Reconocimientos, premios, acreditaciones de calidad (nacionales o internacionales), cirugías exitosas, innovaciones médicas, aportes científicos, expansión o hitos que exalten y beneficien la imagen corporativa de '{marca_target}' en salud.\n"
+            f"- Negativo: Demandas penales o civiles, fallas clínicas u operativas, quejas médicas, crisis institucionales, investigaciones o reclamaciones directas contra '{marca_target}'.\n"
+            f"- Neutro: Menciones secundarias, informativas de contexto sectorial o de pasillo sin connotación reputacional directa de éxito o fracaso.\n\n"
             f"2. CATEGORÍA (Involucramiento institucional - Escribe exactamente uno de estos nombres):\n"
             f"- Sucesos: Acciones que ocurren en donde aparece mi marca, pero no se encuentran ligados a mi objetivo de negocio. Ej: Heridos en la balacera en Usaquén, cierres viales u obras viales donde se asocia la marca por cercanía.\n"
             f"- Core: Servicios direccionados a mi estrategia de negocio cardiovascular y trasplantes (exclusivo para cuando involucra cardiovascular/trasplante en '{marca_target}'). Ej: Síntomas de un infarto.\n"
-            f"- Especialidades: Todas las otras especialidades médicas que se ofrecen en LaCardio (neurología, pediatría, etc.). Ej: Enfermedades neurológicas.\n"
+            f"- Especialidades: Todas las otras especialidades médicas que se ofrecen en LaCardio (neurología, pediatría, oncología, neurología, etc.). Ej: Enfermedades neurológicas.\n"
             f"- Ranking: Menciones en las diferentes rankings, mediciones de reputación o escalafones. Ej: Top de las marcas colombianas P&M.\n"
             f"- Sector: Las menciones que se relacionan al sector salud en general, embargos, problemas de EPS o aspectos noticiosos que LaCardio debe tener en cuenta. Ej: Crisis en el sector salud.\n"
             f"- Reforma: Las menciones que van relacionadas a los lineamientos normativos que ocurren en el entorno y por los cuales la marca puede verse afectada (reforma a la salud, leyes, etc.). Ej: Activan la reforma de salud.\n"
@@ -861,10 +926,16 @@ class ClasificadorNoticiasInteligente:
         rpg = {}
         subgrupos_a_evaluar = []
         
-        # Validación de Titular Genérico/Última Hora de forma local antes de invocar la API
+        # Validación de Titular Genérico / No-Salud de forma local antes de invocar la API
         for idx, (txt, menc, r_title) in enumerate(reps_mencion):
             key = llaves_subgrupo[idx]
             if es_titular_generico(r_title):
+                rpg[key] = {
+                    "tono": "Neutro",
+                    "categoria": "Sector",
+                    "narrativa": "Otras"
+                }
+            elif es_noticia_no_salud(r_title):
                 rpg[key] = {
                     "tono": "Neutro",
                     "categoria": "Sucesos",
@@ -903,16 +974,33 @@ class ClasificadorNoticiasInteligente:
             rule_cat, rule_nar = self._clasificar_con_reglas_locales(t_rep, r_rep)
             cat_final = r.get("categoria")
             nar_final = r.get("narrativa")
+            tono_final = r.get("tono")
+            
+            # Forzar tono POSITIVO para hitos médicos, reconocimientos, cirugías o innovaciones clave en el sector salud
+            if self._es_relevancia_positiva_salud(t_rep, r_rep) and tono_final == "Neutro":
+                # Validar que no sea una noticia de tránsito o cierre vial de pasillo antes de potenciar el tono
+                if not es_noticia_no_salud(t_rep) and not es_titular_generico(t_rep):
+                    tono_final = "Positivo"
             
             if cat_final == "Sector" and rule_cat in ("Core", "Especialidades", "Ranking", "Reforma", "Sucesos", "Corporativo"):
                 cat_final = rule_cat
             if nar_final == "Otras" and rule_nar and rule_nar != "Otras":
                 nar_final = rule_nar
                 
+            # Sobrescribir de manera estricta si es clasificado localmente como noticia de tránsito o boletín genérico
+            if es_titular_generico(t_rep):
+                tono_final = "Neutro"
+                cat_final = "Sector"
+                nar_final = "Otras"
+            elif es_noticia_no_salud(t_rep):
+                tono_final = "Neutro"
+                cat_final = "Sucesos"
+                nar_final = "Otras"
+                
             # Asignar de manera estrictamente idéntica a todos los miembros del subgrupo (Garantiza consistencia absoluta)
             for i in idxs:
                 final[i] = {
-                    "tono": r.get("tono"),
+                    "tono": tono_final,
                     "categoria": cat_final,
                     "narrativa": nar_final
                 }
@@ -924,11 +1012,11 @@ class ClasificadorNoticiasInteligente:
         t_r = (str(titulo) + " " + str(resumen)).lower()
         
         core_kw = ["infarto", "trasplante", "corazón", "corazon", "cardio", "hemodinamia", "marcapasos", "válvula", "valvula", "arritmia", "miocardio", "arteria", "cardiología", "cardiologia", "cardiovascular"]
-        esp_kw = ["neurología", "neurologia", "ortopedia", "pediatría", "pediatria", "ginecología", "ginecologia", "anestesiología", "anestesiologia", "nefrología", "nefrologia", "dermatología", "dermatologia", "urología", "urologia", "oftalmología", "oftalmologia", "odontología", "consulta externa", "urgencias"]
-        rank_kw = ["ranking", "escalafón", "escalafon", "merco", "américa economía", "america economia", "p&m", "marcas colombianas", "prestigio", "medición", "monitor"]
+        esp_kw = ["neurología", "neurologia", "ortopedia", "pediatría", "pediatria", "ginecología", "ginecologia", "anestesiología", "anestesiologia", "nefrología", "nefrologia", "dermatología", "dermatologia", "urología", "urologia", "oftalmología", "oftalmologia", "odontología", "consulta externa", "urgencias", "oncología", "oncologia"]
+        rank_kw = ["ranking", "escalafón", "escalafon", "merco", "américa economía", "america economia", "p&m", "marcas colombianas", "prestigio", "medición", "monitor", "las mas innovadoras", "las más innovadoras"]
         ref_kw = ["reforma a la salud", "reforma de salud", "proyecto de ley", "senado", "debate de la reforma", "ley de salud"]
         sect_kw = ["crisis en el sector", "crisis de la salud", "eps", "minsalud", "adres", "embargo", "superintendencia de salud", "supersalud", "red hospitalaria", "clínicas", "escasez de medicamentos"]
-        corp_kw = ["latidos futuros", "alianza", "convenio", "acreditación", "acreditacion", "reconocimiento corporativo", "junta directiva", "asamblea de socios", "junta"]
+        corp_kw = ["latidos futuros", "alianza", "convenio", "acreditación", "acreditacion", "reconocimiento corporativo", "junta directiva", "asamblea de socios", "junta", "recibe maxima", "recibe máxima"]
         suc_kw = ["balacera", "robo", "atraco", "herido", "choque", "accidente", "incendio", "capturado", "policía", "policia", "homicidio"]
         
         matched_cat = None
@@ -941,8 +1029,8 @@ class ClasificadorNoticiasInteligente:
         elif any(k in t_r for k in suc_kw): matched_cat = "Sucesos"
         
         sost_kw = ["sostenibilidad", "propósito social", "proposito social", "donación", "donacion", "filbo", "brigada", "responsabilidad social"]
-        exc_kw = ["excelencia", "reacreditación", "reacreditacion", "joint commission", "jci", "experticia", "calidad médica", "alta complejidad"]
-        inn_kw = ["innovación", "innovacion", "desarrollo", "nature index", "investigación", "investigacion", "tecnología", "tecnologia", "patente", "telemedicina", "da vinci", "robot"]
+        exc_kw = ["excelencia", "reacreditación", "reacreditacion", "joint commission", "jci", "experticia", "calidad médica", "alta complejidad", "maxima acreditacion", "máxima acreditación"]
+        inn_kw = ["innovación", "innovacion", "desarrollo", "nature index", "investigación", "investigacion", "tecnología", "tecnologia", "patente", "telemedicina", "da vinci", "robot", "innovadoras"]
         emp_kw = ["colaborador", "empleado", "orgullo cardio", "talento humano", "bienestar", "enfermera", "médico es orgullo", "medico es orgullo"]
         port_kw = ["actividad física", "actividad fisica", "chequeo", "consejos de salud", "vacunación", "vacunacion", "nutrición", "nutricion"]
         
@@ -1530,7 +1618,7 @@ def main():
         <div class="app-header-icon">◈</div>
         <div class="app-header-text">
             <div class="app-header-title">Análisis de Noticias - Fundación CardioInfantil</div>
-            <div class="app-header-version">v18.1 · Realizado por Johnathan Cortés</div>
+            <div class="app-header-version">v18.2 · Realizado por Johnathan Cortés</div>
         </div>
         <div class="app-header-badge">IA</div>
     </div>""", unsafe_allow_html=True)
@@ -1625,7 +1713,7 @@ def main():
         render_quick_tab()
 
     st.markdown(
-        '<div class="footer">v18.1 · Análisis de Noticias con IA · Johnathan Cortés ©</div>',
+        '<div class="footer">v18.2 · Análisis de Noticias con IA · Johnathan Cortés ©</div>',
         unsafe_allow_html=True
     )
 
