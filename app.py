@@ -424,7 +424,7 @@ def check_password():
     st.markdown("""
     <div class="auth-wrap">
         <div class="auth-icon">◈</div>
-        <div class="auth-title">Análisis La Cardio 🧑‍⚕️</div>
+        <div class="auth-title">Análisis La Cardio 🏥</div>
         <div class="auth-sub">Ingresa tus credenciales para continuar</div>
     </div>""", unsafe_allow_html=True)
     _, col, _ = st.columns([1, 2, 1])
@@ -637,6 +637,35 @@ def es_noticia_no_salud(titulo: str) -> bool:
         ]
         if not any(ex in t for ex in excepciones_salud):
             return True
+    return False
+
+def es_suceso_excluido_politica(titulo: str) -> bool:
+    """
+    Verifica si el título contiene temas de la coyuntura política y personajes específicos
+    (expresidentes, Gaviria, Miguel Uribe, atentados políticos, Wendy Sepúlveda o boletines genéricos)
+    para clasificarlos directamente como Neutro, Sucesos y Otras de forma local e infalible.
+    """
+    if not titulo: return False
+    t = unidecode(str(titulo).lower())
+    
+    # Comprobar el atentado electoral específico
+    if "atentado que cambio historia de los comicios" in t or "comicios a la presidencia" in t:
+        return True
+        
+    # Palabras clave y personajes para forzar a Sucesos / Otras
+    patrones = [
+        "cesar gaviria", "gaviria", "expresidente",
+        "miguel uribe", "miguel uribe turbay",
+        "caviria", "cavi ria", "caviria sigue hospitalizado", "cavi ria sigue hospitalizado",
+        "wendy sepulveda", "noticias del", "noticias nacionales",
+        "atentado contra miguel uribe"
+    ]
+    
+    for p in patrones:
+        p_norm = unidecode(p.lower())
+        if p_norm in t:
+            return True
+            
     return False
 
 
@@ -926,7 +955,7 @@ class ClasificadorNoticiasInteligente:
         rpg = {}
         subgrupos_a_evaluar = []
         
-        # Validación de Titular Genérico / No-Salud de forma local antes de invocar la API
+        # Validación de Titular Genérico / No-Salud / Política Excluidos de forma local antes de invocar la API
         for idx, (txt, menc, r_title) in enumerate(reps_mencion):
             key = llaves_subgrupo[idx]
             if es_titular_generico(r_title):
@@ -935,7 +964,7 @@ class ClasificadorNoticiasInteligente:
                     "categoria": "Sector",
                     "narrativa": "Otras"
                 }
-            elif es_noticia_no_salud(r_title):
+            elif es_noticia_no_salud(r_title) or es_suceso_excluido_politica(r_title):
                 rpg[key] = {
                     "tono": "Neutro",
                     "categoria": "Sucesos",
@@ -978,8 +1007,8 @@ class ClasificadorNoticiasInteligente:
             
             # Forzar tono POSITIVO para hitos médicos, reconocimientos, cirugías o innovaciones clave en el sector salud
             if self._es_relevancia_positiva_salud(t_rep, r_rep) and tono_final == "Neutro":
-                # Validar que no sea una noticia de tránsito o cierre vial de pasillo antes de potenciar el tono
-                if not es_noticia_no_salud(t_rep) and not es_titular_generico(t_rep):
+                # Validar que no sea una noticia excluida de tránsito o política antes de potenciar el tono
+                if not es_noticia_no_salud(t_rep) and not es_suceso_excluido_politica(t_rep) and not es_titular_generico(t_rep):
                     tono_final = "Positivo"
             
             if cat_final == "Sector" and rule_cat in ("Core", "Especialidades", "Ranking", "Reforma", "Sucesos", "Corporativo"):
@@ -987,12 +1016,12 @@ class ClasificadorNoticiasInteligente:
             if nar_final == "Otras" and rule_nar and rule_nar != "Otras":
                 nar_final = rule_nar
                 
-            # Sobrescribir de manera estricta si es clasificado localmente como noticia de tránsito o boletín genérico
+            # Sobrescribir de manera estricta si es clasificado localmente como noticia de tránsito, política o boletín genérico
             if es_titular_generico(t_rep):
                 tono_final = "Neutro"
                 cat_final = "Sector"
                 nar_final = "Otras"
-            elif es_noticia_no_salud(t_rep):
+            elif es_noticia_no_salud(t_rep) or es_suceso_excluido_politica(t_rep):
                 tono_final = "Neutro"
                 cat_final = "Sucesos"
                 nar_final = "Otras"
