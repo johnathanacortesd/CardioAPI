@@ -18,7 +18,7 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.cluster import AgglomerativeClustering
 import json
-import asyncio
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 from typing import List, Dict, Tuple, Optional, Any
 import joblib
@@ -40,20 +40,16 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-OPENAI_MODEL_EMBEDDING = "text-embedding-3-small"
+OPENAI_MODEL_EMBEDDING     = "text-embedding-3-small"
 OPENAI_MODEL_CLASIFICACION = "gpt-4.1-nano-2025-04-14"
 
-CONCURRENT_REQUESTS = 50
-SIMILARITY_THRESHOLD_TONO = 0.82
+CONCURRENT_REQUESTS          = 50
+SIMILARITY_THRESHOLD_TONO    = 0.82
 SIMILARITY_THRESHOLD_TITULOS = 0.93
 
-PRICE_INPUT_1M = 0.10
-PRICE_OUTPUT_1M = 0.40
+PRICE_INPUT_1M     = 0.10
+PRICE_OUTPUT_1M    = 0.40
 PRICE_EMBEDDING_1M = 0.02
-
-if 'tokens_input' not in st.session_state: st.session_state['tokens_input'] = 0
-if 'tokens_output' not in st.session_state: st.session_state['tokens_output'] = 0
-if 'tokens_embedding' not in st.session_state: st.session_state['tokens_embedding'] = 0
 
 STOPWORDS_ES = set("""
 a ante bajo cabe con contra de desde durante en entre hacia hasta mediante
@@ -206,6 +202,7 @@ def corregir_tildes(texto: str) -> str:
             resultado.append(p)
     return " ".join(resultado)
 
+
 # ======================================
 # CSS
 # ======================================
@@ -215,23 +212,23 @@ def load_custom_css():
 @import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Text:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 :root {
-  --bg:#f8f9fa;--s1:#ffffff;--s2:#f1f3f4;--s3:#e8eaed;
-  --border:#dadce0;--border2:#bdc1c6;--border-focus:#f97316;
-  --text:#202124;--text2:#3c4043;--text3:#5f6368;--text4:#9aa0a6;
-  --accent:#f97316;--accent2:#ea580c;--accent3:#c2410c;
-  --accent-bg:#fff7ed;--accent-bg2:#ffedd5;--accent-bdr:#fed7aa;
-  --green:#059669;--green2:#047857;--green-bg:#ecfdf5;--green-bdr:#a7f3d0;
-  --red:#dc2626;--amber:#d97706;--blue:#1a73e8;
-  --r:8px;--r2:12px;--r3:16px;--r4:20px;
-  --shadow-sm:0 1px 2px rgba(60,64,67,0.1),0 1px 3px rgba(60,64,67,0.08);
-  --shadow-md:0 1px 3px rgba(60,64,67,0.12),0 4px 8px rgba(60,64,67,0.08);
-  --shadow-lg:0 2px 6px rgba(60,64,67,0.1),0 8px 24px rgba(60,64,67,0.1);
-  --transition:all 0.2s cubic-bezier(0.4,0,0.2,1);
+    --bg:#f8f9fa;--s1:#ffffff;--s2:#f1f3f4;--s3:#e8eaed;
+    --border:#dadce0;--border2:#bdc1c6;--border-focus:#f97316;
+    --text:#202124;--text2:#3c4043;--text3:#5f6368;--text4:#9aa0a6;
+    --accent:#f97316;--accent2:#ea580c;--accent3:#c2410c;
+    --accent-bg:#fff7ed;--accent-bg2:#ffedd5;--accent-bdr:#fed7aa;
+    --green:#059669;--green2:#047857;--green-bg:#ecfdf5;--green-bdr:#a7f3d0;
+    --red:#dc2626;--amber:#d97706;--blue:#1a73e8;
+    --r:8px;--r2:12px;--r3:16px;--r4:20px;
+    --shadow-sm:0 1px 2px rgba(60,64,67,0.1),0 1px 3px rgba(60,64,67,0.08);
+    --shadow-md:0 1px 3px rgba(60,64,67,0.12),0 4px 8px rgba(60,64,67,0.08);
+    --shadow-lg:0 2px 6px rgba(60,64,67,0.1),0 8px 24px rgba(60,64,67,0.1);
+    --transition:all 0.2s cubic-bezier(0.4,0,0.2,1);
 }
 html,body,[data-testid="stApp"]{
-  background:var(--bg)!important;color:var(--text)!important;
-  font-family:'Google Sans Text','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-  font-size:14px;-webkit-font-smoothing:antialiased;letter-spacing:0.01em;
+    background:var(--bg)!important;color:var(--text)!important;
+    font-family:'Google Sans Text','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    font-size:14px;-webkit-font-smoothing:antialiased;letter-spacing:0.01em;
 }
 #MainMenu,footer,header{visibility:hidden}.stDeployButton{display:none}
 .block-container{padding-top:1rem!important;padding-bottom:0!important}
@@ -313,12 +310,13 @@ label[data-testid="stWidgetLabel"] p{font-family:'Google Sans',sans-serif!import
 hr{border-color:var(--s3)!important;margin:0.5rem 0!important}
 [data-testid="stSelectbox"]>div>div{font-family:'Google Sans Text',sans-serif!important;font-size:0.88rem!important;color:var(--text)!important;}
 @media(max-width:768px){
-  .metrics-grid{grid-template-columns:repeat(2,1fr)}
-  .upload-zone{grid-template-columns:1fr}
-  .app-header{flex-direction:column;text-align:center;gap:0.5rem;padding:1rem}
+    .metrics-grid{grid-template-columns:repeat(2,1fr)}
+    .upload-zone{grid-template-columns:1fr}
+    .app-header{flex-direction:column;text-align:center;gap:0.5rem;padding:1rem}
 }
 </style>
 """, unsafe_allow_html=True)
+
 
 # ======================================
 # Caché Global de Embeddings
@@ -364,11 +362,26 @@ class EmbeddingCache:
         self._hits = 0
         self._misses = 0
 
-if '_emb_cache' not in st.session_state:
-    st.session_state['_emb_cache'] = EmbeddingCache()
-
 def get_embedding_cache():
+    if '_emb_cache' not in st.session_state:
+        st.session_state['_emb_cache'] = EmbeddingCache()
     return st.session_state['_emb_cache']
+
+
+# ======================================
+# Inicializador Seguro de Estado de Sesión
+# ======================================
+def init_session_state():
+    """Garantiza la inicialización segura de variables antes de renderizar la app."""
+    if 'tokens_input' not in st.session_state: 
+        st.session_state['tokens_input'] = 0
+    if 'tokens_output' not in st.session_state: 
+        st.session_state['tokens_output'] = 0
+    if 'tokens_embedding' not in st.session_state: 
+        st.session_state['tokens_embedding'] = 0
+    if '_emb_cache' not in st.session_state:
+        st.session_state['_emb_cache'] = EmbeddingCache()
+
 
 # ======================================
 # Utilidades de Configuración Automática
@@ -401,6 +414,7 @@ def load_config(config_source):
     ).to_dict()
     return region_map, internet_map
 
+
 # ======================================
 # Función de Password robusta con Fallback local
 # ======================================
@@ -419,11 +433,14 @@ def check_password():
             pw = st.text_input("Contraseña", type="password", placeholder="Ingresa tu contraseña")
             if st.form_submit_button("Ingresar", use_container_width=True, type="primary"):
                 try:
+                    # Intenta recuperar desde los secretos del servidor
                     correct_pw = st.secrets.get("APP_PASSWORD", None)
                     if correct_pw is None:
                         correct_pw = "admin123"
                 except Exception:
+                    # Si st.secrets no está configurado (entorno local sin secrets.toml)
                     correct_pw = "admin123"
+                
                 if pw == correct_pw:
                     st.session_state["password_correct"] = True
                     st.rerun()
@@ -439,16 +456,6 @@ def call_with_retries(fn, *a, **kw):
         except Exception as e:
             if att == 2: raise e
             time.sleep(d)
-            d *= 2
-
-async def acall_with_retries(fn, *a, **kw):
-    d = 1
-    for att in range(3):
-        try:
-            return await fn(*a, **kw)
-        except Exception as e:
-            if att == 2: raise e
-            await asyncio.sleep(d)
             d *= 2
 
 def norm_key(text):
@@ -475,22 +482,31 @@ def clean_cuerpo(text):
     return text.strip()
 
 def normalize_title_for_comparison(title):
-    if not isinstance(title, str):
+    """
+    Normaliza el título de forma estricta, removiendo tildes usando unidecode y
+    eliminando sufijos descriptivos o fuentes externas para agrupamientos precisos.
+    """
+    if not isinstance(title, str): 
         return ""
-    cleaned = re.sub(r"\s+[|–—-]\s+[^|–—-]+$", "", title).strip()
+    # 1. Quitar tildes (ej: Séptima -> septima, séptima -> septima)
+    cleaned = unidecode(title).strip()
+    # 2. Remover fuentes externas finales (" | El Tiempo", " - Caracol", etc.)
+    cleaned = re.sub(r"\s+[\|–—-]\s+[^\|–—-]+$", "", cleaned).strip()
+    # 3. Remover prefijos descriptivos de lugar/tag (ej: "Cundinamarca: ...")
     if ":" in cleaned:
         parts = cleaned.split(":", 1)
         suffix = parts[1].strip()
         if len(suffix) >= 10:
             cleaned = suffix
+    # 4. Pasar a minúsculas y omitir caracteres no alfanuméricos
     return re.sub(r"\W+", " ", cleaned).lower().strip()
 
 def clean_title_for_output(title):
-    return re.sub(r"\s*|\s*[\w\s]+$", "", str(title)).strip()
+    return re.sub(r"\s*\|\s*[\w\s]+$", "", str(title)).strip()
 
 def corregir_texto(text):
     if not isinstance(text, str): return text
-    text = re.sub(r"(<br>|[...]|\s+)", " ", text).strip()
+    text = re.sub(r"(<br>|\[\.\.\.\]|\s+)", " ", text).strip()
     m = re.search(r"[A-ZÁÉÍÓÚÑ]", text)
     if m: text = text[m.start():]
     if text and not text.endswith("..."): text = text.rstrip(".") + "..."
@@ -550,33 +566,6 @@ def texto_para_embedding(titulo, resumen, max_len=1800):
     return f"{t}. {t}. {t}. {r}"[:max_len]
 
 # ======================================
-# Detección de títulos tipo "última hora" / boletines
-# ======================================
-
-# Patrones de títulos que son boletines genéricos, titulares de última hora
-# o encabezados de sección sin contenido sustancial propio.
-_BREAKING_PATTERNS = re.compile(
-    r"(ultima[s]?\s+hora[s]?|ultimo[s]?\s+minuto[s]?|noticias\s+de\s+ultima\s+hora"
-    r"|noticias\s+del\s+d[ií]a|noticias\s+en\s+vivo|en\s+vivo\s+y\s+en\s+directo"
-    r"|titulares\s+de\s+hoy|titulares\s+del\s+d[ií]a|titulares\s+de\s+la\s+ma[nñ]ana"
-    r"|titulares\s+de\s+la\s+noche|titulares\s+de\s+la\s+tarde"
-    r"|resumen\s+informativo|boletin\s+informativo|flash\s+informativo"
-    r"|noticias\s+de\s+hoy|minuto\s+a\s+minuto|breaking\s+news"
-    r"|informaci[oó]n\s+de\s+[uú]ltima\s+hora)",
-    re.IGNORECASE
-)
-
-def es_titulo_ultima_hora(titulo: str) -> bool:
-    """
-    Devuelve True si el título corresponde a un boletín genérico,
-    titular de última hora o encabezado de sección sin noticia sustancial.
-    """
-    if not isinstance(titulo, str) or not titulo.strip():
-        return False
-    titulo_norm = unidecode(titulo.strip().lower())
-    return bool(_BREAKING_PATTERNS.search(titulo_norm))
-
-# ======================================
 # Limpieza de Menciones Específica
 # ======================================
 def limpiar_mencion(mencion_str):
@@ -586,8 +575,43 @@ def limpiar_mencion(mencion_str):
     """
     if not isinstance(mencion_str, str):
         return mencion_str
+    # Quitar cualquier ocurrencia de "La Cardio 26 - " de forma case-insensitive
     cleaned = re.sub(r'(?i)\bLa\s+Cardio\s+26\s*-\s*', '', mencion_str)
     return cleaned.strip()
+
+# ======================================
+# Filtro de Titulares de Última Hora / Genéricos
+# ======================================
+def es_titular_generico(titulo: str) -> bool:
+    """
+    Verifica localmente si un titular contiene cadenas comunes de resúmenes diarios,
+    titulares sin contexto o de última hora para clasificarlos directamente.
+    """
+    if not titulo: return False
+    t = unidecode(str(titulo).lower())
+    patrones = [
+        r"titulares\s+de\s+hoy",
+        r"titulares\s+del\s+dia",
+        r"titulares\s+ultima\s+hora",
+        r"ultima\s+hora",
+        r"resumen\s+de\s+noticias",
+        r"las\s+noticias\s+de\s+hoy",
+        r"noticias\s+del\s+dia",
+        r"lo\s+que\s+debe\s+saber",
+        r"boletin\s+de\s+noticias",
+        r"titulares\s+de\s+la\s+manana",
+        r"titulares\s+de\s+la\s+tarde",
+        r"titulares\s+de\s+la\s+noche",
+        r"titulares\s+de\s+prensa",
+        r"resumen\s+informativo",
+        r"titulares\s+de\s+noticias",
+        r"titulares\s+de\s+ultima\s+hora"
+    ]
+    for p in patrones:
+        if re.search(p, t):
+            return True
+    return False
+
 
 # ======================================
 # Estructuras de Datos Avanzadas
@@ -632,26 +656,38 @@ def agrupar_textos_similares(textos, umbral):
 
 def agrupar_por_titulo_similar(titulos):
     """
-    Agrupa títulos similares usando SequenceMatcher.
-    Retorna un dict {grupo_id: [índices]}.
-    IMPORTANTE: Esta función es la fuente de verdad para agrupar
-    noticias con el mismo título o título muy parecido, garantizando
-    que recibirán exactamente el mismo Tono/Categoría/Narrativas.
+    Agrupa títulos homólogos basándose en un algoritmo que combina correspondencia
+    estricta unidecode y similitud Jaccard de tokens.
     """
     gid, grupos, used = 0, {}, set()
     norm = [normalize_title_for_comparison(t) for t in titulos]
+    
+    def son_similares(s1, s2):
+        if not s1 or not s2: return False
+        if s1 == s2: return True
+        # Ratio de SequenceMatcher
+        seq_ratio = SequenceMatcher(None, s1, s2).ratio()
+        if seq_ratio >= 0.85: return True
+        
+        # Jaccard de palabras
+        w1, w2 = set(s1.split()), set(s2.split())
+        if w1 and w2:
+            jaccard = len(w1 & w2) / len(w1 | w2)
+            if jaccard >= 0.80: return True
+        return False
+
     for i in range(len(norm)):
         if i in used or not norm[i]: continue
         grp = [i]
         used.add(i)
         for j in range(i + 1, len(norm)):
             if j in used or not norm[j]: continue
-            if SequenceMatcher(None, norm[i], norm[j]).ratio() >= SIMILARITY_THRESHOLD_TITULOS:
+            if son_similares(norm[i], norm[j]):
                 grp.append(j)
                 used.add(j)
-        # Registrar grupo aunque sea de 1 (para que el índice quede catalogado)
-        grupos[gid] = list(set(grp))
-        gid += 1
+        if len(grp) >= 1:
+            grupos[gid] = grp
+            gid += 1
     return grupos
 
 def seleccionar_representante(indices, textos):
@@ -694,8 +730,9 @@ def get_embeddings_batch(textos, batch_size=100):
                     pass
     return resultados
 
+
 # ======================================
-# ANALIZADOR INTELIGENTE UNIFICADO
+# ANALIZADOR INTELIGENTE UNIFICADO - MULTI-HILOS ESTABLE (ThreadPoolExecutor)
 # ======================================
 class ClasificadorNoticiasInteligente:
     def __init__(self, marca_principal, aliases):
@@ -710,322 +747,221 @@ class ClasificadorNoticiasInteligente:
             return m in t
         return any(n in t for n in self._all_names)
 
-    async def _analizar_llm(self, texto, marca_especifica, sem, titulo_original=""):
-        async with sem:
-            marca_target = str(marca_especifica).strip() if (
-                marca_especifica and str(marca_especifica).strip() not in ("", "nan", "N/A", "-")
-            ) else self.marca_principal
+    def _analizar_llm_sync(self, texto, marca_especifica):
+        """Llamada síncrona a la API de OpenAI, ideal para ejecución segura en ThreadPoolExecutor."""
+        marca_target = str(marca_especifica).strip() if (marca_especifica and str(marca_especifica).strip() not in ("", "nan", "N/A", "-")) else self.marca_principal
+        
+        # Si el texto de la noticia no contiene mención de la marca evaluada, devolvemos valores por defecto neutros
+        if not self._menciona_marca(texto, marca_target):
+            return {
+                "tono": "Neutro",
+                "categoria": "Sector",
+                "narrativa": "Otras"
+            }
 
-            # ── Regla 1: Título de tipo "última hora" / boletín genérico ──
-            if es_titulo_ultima_hora(titulo_original):
-                return {"tono": "Neutro", "categoria": "Sucesos", "narrativa": "Otras"}
+        prompt = (
+            f"Eres un experto analista de reputación, prensa y posicionamiento de marcas en el sector salud de Colombia.\n"
+            f"Tu tarea consiste en realizar un análisis de prensa inteligente, contextual y de alta precisión para la marca '{marca_target}' en la siguiente noticia.\n\n"
+            f"TEXTO DE LA NOTICIA a evaluar:\n{texto[:1800]}\n\n"
+            f"ENTIDAD BAJO ANÁLISIS EN ESTE CASO:\n'{marca_target}'\n\n"
+            f"--- INSTRUCCIONES DE ENFOQUE CRÍTICO (FUNDAMENTAL) ---\n"
+            f"Tu análisis debe centrarse de manera estricta en la marca '{marca_target}' y en CÓMO se le asocia en la noticia.\n"
+            f"Por ejemplo, si la noticia aborda un logro de innovación médica general de un competidor, pero la entidad '{marca_target}' NO es la que realiza el avance, la narrativa de esta fila NO debe ser 'Innovación + Desarrollo' sino 'Otras'. Sé analítico, preciso y contextual.\n\n"
+            f"1. TONO DE REPUTACIÓN (En relación directa con '{marca_target}'):\n"
+            f"Evalúa cómo afecta el artículo a la imagen de '{marca_target}':\n"
+            f"- Positivo: Reconocimientos, premios, aportes científicos, expansión o hitos que beneficien la imagen corporativa de '{marca_target}'.\n"
+            f"- Negativo: Demandas penales o civiles, fallas clínicas u operativas, crisis institucionales, investigaciones o reclamaciones directas contra '{marca_target}'.\n"
+            f"- Neutro: Menciones secundarias, informativas de contexto sectorial o de pasillo sin connotación reputacional directa.\n\n"
+            f"2. CATEGORÍA (Involucramiento institucional - Escribe exactamente uno de estos nombres):\n"
+            f"- Sucesos: Acciones que ocurren en donde aparece mi marca, pero no se encuentran ligados a mi objetivo de negocio. Ej: Heridos en la balacera en Usaquén, cierres viales u obras viales donde se asocia la marca por cercanía.\n"
+            f"- Core: Servicios direccionados a mi estrategia de negocio cardiovascular y trasplantes (exclusivo para cuando involucra cardiovascular/trasplante en '{marca_target}'). Ej: Síntomas de un infarto.\n"
+            f"- Especialidades: Todas las otras especialidades médicas que se ofrecen en LaCardio (neurología, pediatría, etc.). Ej: Enfermedades neurológicas.\n"
+            f"- Ranking: Menciones en las diferentes rankings, mediciones de reputación o escalafones. Ej: Top de las marcas colombianas P&M.\n"
+            f"- Sector: Las menciones que se relacionan al sector salud en general, embargos, problemas de EPS o aspectos noticiosos que LaCardio debe tener en cuenta. Ej: Crisis en el sector salud.\n"
+            f"- Reforma: Las menciones que van relacionadas a los lineamientos normativos que ocurren en el entorno y por los cuales la marca puede verse afectada (reforma a la salud, leyes, etc.). Ej: Activan la reforma de salud.\n"
+            f"- Corporativo: Acciones que ocurren de la marca en donde corresponde a participaciones, reconocimientos o menciones como resultados de una alianza, asambleas o asocio corporativo. Ej: Encuentro Latidos Futuros 4.\n\n"
+            f"3. NARRATIVAS (Rol del mensaje estratégico - Escribe exactamente uno de estos nombres):\n"
+            f"- Sostenibilidad: Contenido relacionado a las acciones de sostenibilidad, voluntariado y propósito social. Ej: Donaciones de libros - Filbo 2026.\n"
+            f"- Excelencia médica: Contenido relacionado con la experticia médica en las diferentes áreas de servicio, acreditaciones y calidad. Ej: Reacreditación de la Joint Commission International.\n"
+            f"- Innovación + Desarrollo: Contenido relacionado con novedades, investigación, apertura de servicios, innovación en equipos y tratamientos realizados por '{marca_target}'. Ej: Producción científica Nature Index 2025.\n"
+            f"- Marca empleadora: Contenido relacionado a las acciones, bienestar, perfiles y logros de nuestros colaboradores. Ej: Jaime Fernandez, reconocido médico es orgullo cardio.\n"
+            f"- Portafolio: Contenido relacionado con los diferentes servicios médicos generales o consejos de hábitos saludables. Ej: Beneficios de la actividad física.\n"
+            f"- Otras: Contenido relacionado con los diferentes servicios médicos pero de carácter puramente referencial, marketing sensorial o menciones secundarias. Ej: Referencial, Marketing sensorial.\n\n"
+            f"Genera estrictamente un objeto JSON plano sin introducciones ni marcas de formato secundarias, exactamente de esta forma:\n"
+            f'{{"tono": "Positivo|Negativo|Neutro", '
+            f'"categoria": "Sucesos|Core|Especialidades|Ranking|Sector|Reforma|Corporativo", '
+            f'"narrativa": "Sostenibilidad|Excelencia médica|Innovación + Desarrollo|Marca empleadora|Portafolio|Otras"}}'
+        )
 
-            # ── Regla 2: La noticia no menciona a la marca ──
-            if not self._menciona_marca(texto, marca_target):
-                return {"tono": "Neutro", "categoria": "Sector", "narrativa": "Otras"}
-
-            prompt = (
-                f"Eres un analista experto de reputación, prensa y posicionamiento de marcas en el sector salud de Colombia.\n"
-                f"Realiza un análisis de prensa preciso, contextual y de alta fidelidad para la marca '{marca_target}' "
-                f"en la siguiente noticia.\n\n"
-                f"TEXTO DE LA NOTICIA:\n{texto[:1800]}\n\n"
-                f"ENTIDAD BAJO ANÁLISIS: '{marca_target}'\n\n"
-
-                f"══════════════════════════════════════════\n"
-                f"REGLA CRÍTICA DE CONSISTENCIA (PRIORITARIA)\n"
-                f"══════════════════════════════════════════\n"
-                f"Si el TÍTULO de la noticia es prácticamente idéntico al de otra nota del mismo día "
-                f"(por ejemplo, variaciones menores de mayúsculas, tildes o puntuación como:\n"
-                f"  · 'Nuevos cierres en la carrera séptima por obras del corredor verde'\n"
-                f"  · 'Nuevos cierres en la carrera Séptima por obras del Corredor Verde'\n"
-                f"  · 'Nuevos cierres en la carrera Séptima por obras del corredor verde'),\n"
-                f"estas notas DEBEN recibir EXACTAMENTE el mismo Tono, Categoría y Narrativa, "
-                f"sin importar pequeñas diferencias en el cuerpo del texto. "
-                f"El título es el identificador canónico de la noticia.\n\n"
-
-                f"══════════════════════════════════════════\n"
-                f"REGLA DE TÍTULOS TIPO 'ÚLTIMA HORA' / BOLETINES\n"
-                f"══════════════════════════════════════════\n"
-                f"Si el título contiene frases como 'Titulares de hoy', 'Últimas noticias', "
-                f"'Últimas hora', 'Noticias del día', 'Resumen informativo', 'Flash informativo', "
-                f"'Boletín informativo', 'Minuto a minuto', 'Breaking news' o similares, "
-                f"SIEMPRE clasifica como: Tono=Neutro, Categoría=Sucesos, Narrativa=Otras.\n\n"
-
-                f"══════════════════════════════════════════\n"
-                f"1. TONO DE REPUTACIÓN (relación directa con '{marca_target}')\n"
-                f"══════════════════════════════════════════\n"
-                f"Evalúa el impacto del artículo en la imagen de '{marca_target}':\n\n"
-                f"• Positivo → Reconocimientos, premios, aportes científicos, expansión, hitos que "
-                f"beneficien la imagen corporativa DE '{marca_target}'. "
-                f"  Ejemplo: 'La Cardio recibe acreditación internacional JCI por tercera vez.'\n\n"
-                f"• Negativo → Demandas, fallas clínicas u operativas, crisis institucionales, "
-                f"investigaciones o reclamaciones directas CONTRA '{marca_target}'. "
-                f"  Ejemplo: 'Familia demanda a Fundación CardioInfantil por negligencia médica.'\n\n"
-                f"• Neutro → Menciones secundarias, contexto sectorial, noticias de obras viales, "
-                f"política pública, eventos de ciudad, EPS, Minsalud, etc., donde '{marca_target}' "
-                f"aparece solo de forma referencial o no aparece como protagonista. "
-                f"  Ejemplo: 'Cierres viales en la séptima por obras del Corredor Verde.' → Neutro.\n\n"
-
-                f"══════════════════════════════════════════\n"
-                f"2. CATEGORÍA (grado de involucramiento institucional de '{marca_target}')\n"
-                f"══════════════════════════════════════════\n"
-                f"Elige UNA sola categoría:\n\n"
-                f"• Sucesos → Hechos fortuitos, de orden público, accidentes, balaceras, robos, "
-                f"obras de infraestructura vial o urbana, eventos climáticos que ocurren cerca "
-                f"o en la zona de la marca, pero que son AJENOS a su actividad estratégica. "
-                f"  Ejemplo: 'Cierres en la carrera Séptima por obras del Corredor Verde' → Sucesos.\n"
-                f"  Ejemplo: 'Heridos en accidente de tránsito ingresan a urgencias.' → Sucesos.\n\n"
-                f"• Core → Servicios del eje cardiovascular y trasplantes, protagonizados "
-                f"DIRECTAMENTE por '{marca_target}'. "
-                f"  Ejemplo: 'La Cardio realiza el trasplante de corazón número 500.' → Core.\n\n"
-                f"• Especialidades → Otras áreas clínicas (neurología, pediatría, oncología…) "
-                f"vinculadas DIRECTAMENTE a '{marca_target}'. "
-                f"  Ejemplo: 'Cardiólogos de La Cardio atienden pacientes con falla renal.' → Especialidades.\n\n"
-                f"• Ranking → Posicionamiento en mediciones de prestigio corporativo (Merco, "
-                f"América Economía, P&M, Monitor). "
-                f"  Ejemplo: 'La Cardio sube al puesto 3 en el ranking Merco Salud.' → Ranking.\n\n"
-                f"• Sector → Asuntos del contexto general de la salud (crisis de EPS, Minsalud, "
-                f"ADRES, embargos, carencia de medicamentos, política pública de salud) que "
-                f"afectan a '{marca_target}' de forma macro o referencial. "
-                f"  Ejemplo: 'Gobierno reglamenta nueva ley de reforma a la salud.' → Sector.\n\n"
-                f"• Reforma → Debates parlamentarios, proyectos de ley o lineamientos normativos "
-                f"que reestructuran el sistema de salud. "
-                f"  Ejemplo: 'Senado aprueba en tercer debate la reforma a la salud.' → Reforma.\n\n"
-                f"• Corporativo → Acciones comerciales, institucionales, convenios, alianzas, "
-                f"asambleas, eventos propios de '{marca_target}'. "
-                f"  Ejemplo: 'La Cardio firma alianza académica con Universidad de los Andes.' → Corporativo.\n\n"
-
-                f"══════════════════════════════════════════\n"
-                f"3. NARRATIVA (mensaje estratégico de '{marca_target}' en la nota)\n"
-                f"══════════════════════════════════════════\n"
-                f"Elige UNA sola narrativa:\n\n"
-                f"• Sostenibilidad → Programas sociales, ambientales, brigadas médicas, donaciones, "
-                f"responsabilidad social de '{marca_target}'. "
-                f"  Ejemplo: 'La Cardio dona libros en la FILBO.' → Sostenibilidad.\n\n"
-                f"• Excelencia médica → Acreditaciones (JCI), experticia de especialistas, casos "
-                f"de alta complejidad o calidad médica certificada de '{marca_target}'. "
-                f"  Ejemplo: 'La Cardio renueva acreditación Joint Commission.' → Excelencia médica.\n\n"
-                f"• Innovación + Desarrollo → Innovación tecnológica, equipamiento de vanguardia, "
-                f"publicaciones científicas (Nature Index), I+D por parte de '{marca_target}'. "
-                f"  Ejemplo: 'La Cardio implementa robot Da Vinci para cirugías.' → Innovación + Desarrollo.\n"
-                f"  ⚠ ATENCIÓN: Si la innovación es de OTRA entidad y '{marca_target}' solo se "
-                f"menciona de pasada, clasifica como Otras.\n\n"
-                f"• Marca empleadora → Reconocimientos al personal, perfiles de médicos, "
-                f"bienestar de colaboradores de '{marca_target}'. "
-                f"  Ejemplo: 'Cardiólogo de La Cardio gana premio nacional.' → Marca empleadora.\n\n"
-                f"• Portafolio → Promoción de servicios preventivos, chequeos ejecutivos, "
-                f"consejos de salud, pauta publicitaria de '{marca_target}'. "
-                f"  Ejemplo: 'La Cardio lanza programa de chequeo cardiovascular.' → Portafolio.\n\n"
-                f"• Otras → Notas referenciales, noticias de ciudad/infraestructura, "
-                f"política pública o cualquier contenido donde '{marca_target}' no es protagonista "
-                f"de ningún pilar estratégico. "
-                f"  Ejemplo: 'Cierres viales en la séptima.' → Otras.\n\n"
-
-                f"══════════════════════════════════════════\n"
-                f"FORMATO DE RESPUESTA (JSON estricto, sin texto adicional)\n"
-                f"══════════════════════════════════════════\n"
-                f'{{"tono": "Positivo|Negativo|Neutro", '
-                f'"categoria": "Sucesos|Core|Especialidades|Ranking|Sector|Reforma|Corporativo", '
-                f'"narrativa": "Sostenibilidad|Excelencia médica|Innovación + Desarrollo|Marca empleadora|Portafolio|Otras"}}'
+        try:
+            resp = call_with_retries(
+                openai.ChatCompletion.create,
+                model=OPENAI_MODEL_CLASIFICACION,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=60,
+                temperature=0.0,
+                response_format={"type": "json_object"}
             )
+            
+            u = resp.get('usage', {}) if isinstance(resp, dict) else getattr(resp, 'usage', {})
+            if u:
+                st.session_state['tokens_input'] += (u.get('prompt_tokens') if isinstance(u, dict) else getattr(u, 'prompt_tokens', 0)) or 0
+                st.session_state['tokens_output'] += (u.get('completion_tokens') if isinstance(u, dict) else getattr(u, 'completion_tokens', 0)) or 0
+            
+            resultado = json.loads(resp.choices[0].message.content)
+            tono = str(resultado.get("tono", "Neutro")).strip().title()
+            cat = str(resultado.get("categoria", "Sector")).strip().title()
+            nar = str(resultado.get("narrativa", "Otras")).strip()
+            
+            valid_tonos = {"Positivo", "Negativo", "Neutro"}
+            valid_cats = {"Sucesos", "Core", "Especialidades", "Ranking", "Sector", "Reforma", "Corporativo"}
+            valid_nars = {"Sostenibilidad", "Excelencia médica", "Innovación + Desarrollo", "Marca empleadora", "Portafolio", "Otras"}
+            
+            if tono not in valid_tonos: tono = "Neutro"
+            if cat not in valid_cats: cat = "Sector"
+            if nar not in valid_nars:
+                if "innovacion" in nar.lower() or "desarrollo" in nar.lower(): nar = "Innovación + Desarrollo"
+                elif "excelencia" in nar.lower(): nar = "Excelencia médica"
+                elif "marca" in nar.lower() or "empleador" in nar.lower(): nar = "Marca empleadora"
+                else: nar = "Otras"
+                
+            return {"tono": tono, "categoria": cat, "narrativa": nar}
+        except Exception:
+            return {"tono": "Neutro", "categoria": "Sector", "narrativa": "Otras"}
 
-            try:
-                resp = await acall_with_retries(
-                    openai.ChatCompletion.acreate,
-                    model=OPENAI_MODEL_CLASIFICACION,
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=60,
-                    temperature=0.0,
-                    response_format={"type": "json_object"}
-                )
-
-                u = resp.get('usage', {}) if isinstance(resp, dict) else getattr(resp, 'usage', {})
-                if u:
-                    st.session_state['tokens_input'] += (
-                        u.get('prompt_tokens') if isinstance(u, dict) else getattr(u, 'prompt_tokens', 0)
-                    ) or 0
-                    st.session_state['tokens_output'] += (
-                        u.get('completion_tokens') if isinstance(u, dict) else getattr(u, 'completion_tokens', 0)
-                    ) or 0
-
-                resultado = json.loads(resp.choices[0].message.content)
-                tono = str(resultado.get("tono", "Neutro")).strip().title()
-                cat  = str(resultado.get("categoria", "Sector")).strip().title()
-                nar  = str(resultado.get("narrativa", "Otras")).strip()
-
-                valid_tonos = {"Positivo", "Negativo", "Neutro"}
-                valid_cats  = {"Sucesos", "Core", "Especialidades", "Ranking", "Sector", "Reforma", "Corporativo"}
-                valid_nars  = {"Sostenibilidad", "Excelencia médica", "Innovación + Desarrollo",
-                               "Marca empleadora", "Portafolio", "Otras"}
-
-                if tono not in valid_tonos: tono = "Neutro"
-                if cat  not in valid_cats:  cat  = "Sector"
-                if nar  not in valid_nars:
-                    if "innovacion" in nar.lower() or "desarrollo" in nar.lower(): nar = "Innovación + Desarrollo"
-                    elif "excelencia" in nar.lower(): nar = "Excelencia médica"
-                    elif "marca" in nar.lower() or "empleador" in nar.lower(): nar = "Marca empleadora"
-                    else: nar = "Otras"
-
-                return {"tono": tono, "categoria": cat, "narrativa": nar}
-
-            except Exception:
-                return {"tono": "Neutro", "categoria": "Sector", "narrativa": "Otras"}
-
-    async def procesar_lote_async(self, textos, pbar, resumenes, titulos, menciones):
+    def procesar_lote(self, textos, pbar, resumenes, titulos, menciones):
+        """Procesa el lote usando ThreadPoolExecutor nativo, asegurando estabilidad total en Streamlit."""
         n = len(textos)
         txts = textos.tolist()
-
-        pbar.progress(0.05, "Agrupando noticias por similitud de título (consistencia garantizada)...")
-
-        # ── Paso 1: Agrupar estrictamente por título normalizado ──
-        # La agrupación por título es la fuente de verdad principal.
-        # Noticias con título idéntico o muy similar SIEMPRE obtendrán
-        # exactamente el mismo Tono, Categoría y Narrativas.
-        grupos_titulo = agrupar_por_titulo_similar(titulos.tolist())
-
-        # Construir DSU a partir de grupos de título
-        dsu = DSU(n)
-        for _, idxs in grupos_titulo.items():
-            for j in idxs[1:]:
-                dsu.union(idxs[0], j)
-
-        # Agrupar también por similitud semántica de embeddings (refuerzo)
-        txts_emb = [
-            texto_para_embedding(str(titulos.iloc[i]), str(resumenes.iloc[i]))
-            for i in range(n)
-        ]
-        for _, idxs in agrupar_textos_similares(txts_emb, SIMILARITY_THRESHOLD_TONO).items():
-            for j in idxs[1:]:
-                dsu.union(idxs[0], j)
-
-        grupos_dsu = dsu.grupos(n)
-
-        # ── Paso 2: Construir clave (grupo_dsu_root, mención_normalizada) ──
-        # Noticias en el mismo cluster DSU Y con la misma mención de marca
-        # recibirán exactamente el mismo resultado del LLM.
-        grupos_por_mencion: Dict[tuple, list] = defaultdict(list)
-        for cid, idxs in grupos_dsu.items():
+        
+        pbar.progress(0.05, "Agrupando estrictamente por títulos para consistencia absoluta de metadatos...")
+        
+        # 1. Agrupamiento exclusivo basado en similitud estricta del Título (unidecode + lower + Jaccard de palabras)
+        grupos_titulos = agrupar_por_titulo_similar(titulos.tolist())
+        
+        # 2. Agrupar por combinación (GrupoTítuloId, MencionNormalizada)
+        # Esto asegura de forma absoluta que noticias similares con la misma marca hereden idéntico análisis de metadatos
+        grupos_por_mencion = defaultdict(list)
+        for gid, idxs in grupos_titulos.items():
             for idx in idxs:
-                menc      = str(menciones.iloc[idx]).strip()
+                menc = str(menciones.iloc[idx]).strip()
                 menc_norm = norm_key(menc)
-                grupos_por_mencion[(cid, menc_norm)].append(idx)
-
+                grupos_por_mencion[(gid, menc_norm)].append(idx)
+                
         llaves_subgrupo = list(grupos_por_mencion.keys())
-
-        # ── Paso 3: Seleccionar representante por subgrupo y construir tareas ──
+        
         reps_mencion = []
         for k in llaves_subgrupo:
             idxs = grupos_por_mencion[k]
             rep_idx, rep_txt = seleccionar_representante(idxs, txts)
-            menc_especifica  = str(menciones.iloc[rep_idx]).strip()
-            titulo_rep       = str(titulos.iloc[rep_idx])
-            reps_mencion.append((rep_txt, menc_especifica, titulo_rep))
-
-        sem   = asyncio.Semaphore(CONCURRENT_REQUESTS)
-        tasks = [
-            self._analizar_llm(txt, menc, sem, titulo_original=tit)
-            for txt, menc, tit in reps_mencion
-        ]
-        rl = []
-        for i, f in enumerate(asyncio.as_completed(tasks)):
-            rl.append(await f)
-            pbar.progress(
-                0.1 + 0.85 * (i + 1) / max(len(tasks), 1),
-                f"Analizando noticias {i + 1}/{len(tasks)}"
-            )
-
-        rpg = {llaves_subgrupo[i]: r for i, r in enumerate(rl)}
-
-        # ── Paso 4: Propagar resultado a TODOS los índices del subgrupo ──
+            menc_especifica = str(menciones.iloc[rep_idx]).strip()
+            rep_titulo = str(titulos.iloc[rep_idx]).strip()
+            reps_mencion.append((rep_txt, menc_especifica, rep_titulo))
+            
+        rpg = {}
+        subgrupos_a_evaluar = []
+        
+        # Validación de Titular Genérico/Última Hora de forma local antes de invocar la API
+        for idx, (txt, menc, r_title) in enumerate(reps_mencion):
+            key = llaves_subgrupo[idx]
+            if es_titular_generico(r_title):
+                rpg[key] = {
+                    "tono": "Neutro",
+                    "categoria": "Sucesos",
+                    "narrativa": "Otras"
+                }
+            else:
+                subgrupos_a_evaluar.append((key, txt, menc))
+                
+        # Llamadas en paralelo síncronas usando ThreadPoolExecutor (Seguridad ante bucles de Streamlit)
+        if subgrupos_a_evaluar:
+            with ThreadPoolExecutor(max_workers=15) as executor:
+                futures_to_key = {
+                    executor.submit(self._analizar_llm_sync, txt, menc): key 
+                    for key, txt, menc in subgrupos_a_evaluar
+                }
+                
+                total_tareas = len(futures_to_key)
+                for i, future in enumerate(as_completed(futures_to_key)):
+                    key = futures_to_key[future]
+                    try:
+                        rpg[key] = future.result()
+                    except Exception:
+                        rpg[key] = {"tono": "Neutro", "categoria": "Sector", "narrativa": "Otras"}
+                    pbar.progress(0.1 + 0.85 * (i + 1) / total_tareas, f"Analizando noticias {i + 1}/{total_tareas}")
+        
         final = [None] * n
         for k, idxs in grupos_por_mencion.items():
             r = rpg.get(k, {"tono": "Neutro", "categoria": "Sector", "narrativa": "Otras"})
-
+            
+            # Obtener metadatos base evaluados del representante del subgrupo
+            rep_idx = idxs[0]
+            t_rep = titulos.iloc[rep_idx]
+            r_rep = resumenes.iloc[rep_idx]
+            
+            # Aplicar reglas locales heurísticas una única vez sobre el representante del grupo
+            rule_cat, rule_nar = self._clasificar_con_reglas_locales(t_rep, r_rep)
+            cat_final = r.get("categoria")
+            nar_final = r.get("narrativa")
+            
+            if cat_final == "Sector" and rule_cat in ("Core", "Especialidades", "Ranking", "Reforma", "Sucesos", "Corporativo"):
+                cat_final = rule_cat
+            if nar_final == "Otras" and rule_nar and rule_nar != "Otras":
+                nar_final = rule_nar
+                
+            # Asignar de manera estrictamente idéntica a todos los miembros del subgrupo (Garantiza consistencia absoluta)
             for i in idxs:
-                t_val = titulos.iloc[i]
-                r_val = resumenes.iloc[i]
-
-                # Reglas locales de apoyo heurístico (solo como fallback)
-                rule_cat, rule_nar = self._clasificar_con_reglas_locales(t_val, r_val)
-                cat_final = r.get("categoria")
-                nar_final = r.get("narrativa")
-
-                if cat_final == "Sector" and rule_cat in (
-                    "Core", "Especialidades", "Ranking", "Reforma", "Sucesos", "Corporativo"
-                ):
-                    cat_final = rule_cat
-                if nar_final == "Otras" and rule_nar and rule_nar != "Otras":
-                    nar_final = rule_nar
-
                 final[i] = {
-                    "tono":      r.get("tono"),
+                    "tono": r.get("tono"),
                     "categoria": cat_final,
                     "narrativa": nar_final
                 }
-
+                
         pbar.progress(1.0, "Análisis de noticias finalizado")
         return final
 
     def _clasificar_con_reglas_locales(self, titulo, resumen) -> Tuple[Optional[str], Optional[str]]:
         t_r = (str(titulo) + " " + str(resumen)).lower()
-
-        core_kw  = ["infarto", "trasplante", "corazón", "corazon", "cardio", "hemodinamia",
-                    "marcapasos", "válvula", "valvula", "arritmia", "miocardio", "arteria",
-                    "cardiología", "cardiologia", "cardiovascular"]
-        esp_kw   = ["neurología", "neurologia", "ortopedia", "pediatría", "pediatria",
-                    "ginecología", "ginecologia", "anestesiología", "anestesiologia",
-                    "nefrología", "nefrologia", "dermatología", "dermatologia",
-                    "urología", "urologia", "oftalmología", "oftalmologia",
-                    "odontología", "consulta externa", "urgencias"]
-        rank_kw  = ["ranking", "escalafón", "escalafon", "merco", "américa economía",
-                    "america economia", "p&m", "marcas colombianas", "prestigio", "medición", "monitor"]
-        ref_kw   = ["reforma a la salud", "reforma de salud", "proyecto de ley",
-                    "senado", "debate de la reforma", "ley de salud"]
-        sect_kw  = ["crisis en el sector", "crisis de la salud", "eps", "minsalud", "adres",
-                    "embargo", "superintendencia de salud", "supersalud",
-                    "red hospitalaria", "clínicas", "escasez de medicamentos"]
-        corp_kw  = ["latidos futuros", "alianza", "convenio", "acreditación", "acreditacion",
-                    "reconocimiento corporativo", "junta directiva", "asamblea de socios", "junta"]
-        suc_kw   = ["balacera", "robo", "atraco", "herido", "choque", "accidente",
-                    "incendio", "capturado", "policía", "policia", "homicidio",
-                    "corredor verde", "cierre vial", "cierres viales", "obras viales",
-                    "carrera septima", "carrera séptima", "transmilenio"]
-
+        
+        core_kw = ["infarto", "trasplante", "corazón", "corazon", "cardio", "hemodinamia", "marcapasos", "válvula", "valvula", "arritmia", "miocardio", "arteria", "cardiología", "cardiologia", "cardiovascular"]
+        esp_kw = ["neurología", "neurologia", "ortopedia", "pediatría", "pediatria", "ginecología", "ginecologia", "anestesiología", "anestesiologia", "nefrología", "nefrologia", "dermatología", "dermatologia", "urología", "urologia", "oftalmología", "oftalmologia", "odontología", "consulta externa", "urgencias"]
+        rank_kw = ["ranking", "escalafón", "escalafon", "merco", "américa economía", "america economia", "p&m", "marcas colombianas", "prestigio", "medición", "monitor"]
+        ref_kw = ["reforma a la salud", "reforma de salud", "proyecto de ley", "senado", "debate de la reforma", "ley de salud"]
+        sect_kw = ["crisis en el sector", "crisis de la salud", "eps", "minsalud", "adres", "embargo", "superintendencia de salud", "supersalud", "red hospitalaria", "clínicas", "escasez de medicamentos"]
+        corp_kw = ["latidos futuros", "alianza", "convenio", "acreditación", "acreditacion", "reconocimiento corporativo", "junta directiva", "asamblea de socios", "junta"]
+        suc_kw = ["balacera", "robo", "atraco", "herido", "choque", "accidente", "incendio", "capturado", "policía", "policia", "homicidio"]
+        
         matched_cat = None
-        if any(k in t_r for k in core_kw):    matched_cat = "Core"
-        elif any(k in t_r for k in esp_kw):   matched_cat = "Especialidades"
-        elif any(k in t_r for k in rank_kw):  matched_cat = "Ranking"
-        elif any(k in t_r for k in ref_kw):   matched_cat = "Reforma"
-        elif any(k in t_r for k in sect_kw):  matched_cat = "Sector"
-        elif any(k in t_r for k in corp_kw):  matched_cat = "Corporativo"
-        elif any(k in t_r for k in suc_kw):   matched_cat = "Sucesos"
-
-        sost_kw = ["sostenibilidad", "propósito social", "proposito social",
-                   "donación", "donacion", "filbo", "brigada", "responsabilidad social"]
-        exc_kw  = ["excelencia", "reacreditación", "reacreditacion", "joint commission",
-                   "jci", "experticia", "calidad médica", "alta complejidad"]
-        inn_kw  = ["innovación", "innovacion", "desarrollo", "nature index",
-                   "investigación", "investigacion", "tecnología", "tecnologia",
-                   "patente", "telemedicina", "da vinci", "robot"]
-        emp_kw  = ["colaborador", "empleado", "orgullo cardio", "talento humano",
-                   "bienestar", "enfermera", "médico es orgullo", "medico es orgullo"]
-        port_kw = ["actividad física", "actividad fisica", "chequeo", "consejos de salud",
-                   "vacunación", "vacunacion", "nutrición", "nutricion"]
-
+        if any(k in t_r for k in core_kw): matched_cat = "Core"
+        elif any(k in t_r for k in esp_kw): matched_cat = "Especialidades"
+        elif any(k in t_r for k in rank_kw): matched_cat = "Ranking"
+        elif any(k in t_r for k in ref_kw): matched_cat = "Reforma"
+        elif any(k in t_r for k in sect_kw): matched_cat = "Sector"
+        elif any(k in t_r for k in corp_kw): matched_cat = "Corporativo"
+        elif any(k in t_r for k in suc_kw): matched_cat = "Sucesos"
+        
+        sost_kw = ["sostenibilidad", "propósito social", "proposito social", "donación", "donacion", "filbo", "brigada", "responsabilidad social"]
+        exc_kw = ["excelencia", "reacreditación", "reacreditacion", "joint commission", "jci", "experticia", "calidad médica", "alta complejidad"]
+        inn_kw = ["innovación", "innovacion", "desarrollo", "nature index", "investigación", "investigacion", "tecnología", "tecnologia", "patente", "telemedicina", "da vinci", "robot"]
+        emp_kw = ["colaborador", "empleado", "orgullo cardio", "talento humano", "bienestar", "enfermera", "médico es orgullo", "medico es orgullo"]
+        port_kw = ["actividad física", "actividad fisica", "chequeo", "consejos de salud", "vacunación", "vacunacion", "nutrición", "nutricion"]
+        
         matched_nar = None
-        if any(k in t_r for k in sost_kw):    matched_nar = "Sostenibilidad"
-        elif any(k in t_r for k in exc_kw):   matched_nar = "Excelencia médica"
-        elif any(k in t_r for k in inn_kw):   matched_nar = "Innovación + Desarrollo"
-        elif any(k in t_r for k in emp_kw):   matched_nar = "Marca empleadora"
-        elif any(k in t_r for k in port_kw):  matched_nar = "Portafolio"
-        else:                                  matched_nar = "Otras"
-
+        if any(k in t_r for k in sost_kw): matched_nar = "Sostenibilidad"
+        elif any(k in t_r for k in exc_kw): matched_nar = "Excelencia médica"
+        elif any(k in t_r for k in inn_kw): matched_nar = "Innovación + Desarrollo"
+        elif any(k in t_r for k in emp_kw): matched_nar = "Marca empleadora"
+        elif any(k in t_r for k in port_kw): matched_nar = "Portafolio"
+        else: matched_nar = "Otras"
+        
         return matched_cat, matched_nar
+
 
 # ======================================
 # Duplicados y Excel
 # ======================================
 def _normalizar_url(url: str) -> str:
+    """Normaliza URLs eliminando el protocolo http/https y www para una comparación fiable."""
     if not url: return ""
     url = url.strip().lower()
     url = re.sub(r'^https?://', '', url)
@@ -1049,7 +985,7 @@ def detectar_duplicados_avanzado(rows, km):
         streaming_url_raw = row.get(km["link_streaming"])
         if isinstance(streaming_url_raw, dict):
             streaming_url_raw = streaming_url_raw.get("url")
-
+            
         if streaming_url_raw and mencion:
             streaming_url_norm = _normalizar_url(str(streaming_url_raw))
             if streaming_url_norm:
@@ -1061,7 +997,7 @@ def detectar_duplicados_avanzado(rows, km):
                 seen_streaming[sk] = i
 
         if tipo == "Internet":
-            li  = row.get(km["link_nota"])
+            li = row.get(km["link_nota"])
             url = li.get("url") if isinstance(li, dict) else li
             if url and mencion:
                 url_norm = _normalizar_url(str(url))
@@ -1090,15 +1026,15 @@ def detectar_duplicados_avanzado(rows, km):
             for j in range(i + 1, len(idxs)):
                 a, b = idxs[i], idxs[j]
                 if processed[a].get("is_duplicate") or processed[b].get("is_duplicate"): continue
-                ta_  = normalize_title_for_comparison(processed[a].get(km["titulo"]))
-                tb_  = normalize_title_for_comparison(processed[b].get(km["titulo"]))
-                if ta_ and tb_ and SequenceMatcher(None, ta_, tb_).ratio() >= SIMILARITY_THRESHOLD_TITULOS:
-                    if len(ta_) < len(tb_):
+                ta  = normalize_title_for_comparison(processed[a].get(km["titulo"]))
+                tb_ = normalize_title_for_comparison(processed[b].get(km["titulo"]))
+                if ta and tb_ and SequenceMatcher(None, ta, tb_).ratio() >= SIMILARITY_THRESHOLD_TITULOS:
+                    if len(ta) < len(tb_):
                         processed[a]["is_duplicate"] = True
-                        processed[a][km["idduplicada"]] = processed[b].get(km["idnoticia"], "")
+                        processed[a][km["idduplicada"]]  = processed[b].get(km["idnoticia"], "")
                     else:
                         processed[b]["is_duplicate"] = True
-                        processed[b][km["idduplicada"]] = processed[a].get(km["idnoticia"], "")
+                        processed[b][km["idduplicada"]]  = processed[a].get(km["idnoticia"], "")
 
     return processed
 
@@ -1112,8 +1048,8 @@ def read_and_normalize_dossier(sheet, region_map, internet_map):
         for i, h in enumerate(headers):
             if i < len(row):
                 cell = row[i]
-                val  = cell.value
-                url  = cell.hyperlink.target if (cell.hyperlink and cell.hyperlink.target) else None
+                val = cell.value
+                url = cell.hyperlink.target if (cell.hyperlink and cell.hyperlink.target) else None
                 if url:
                     row_data[h] = {"value": val or "Link", "url": url}
                 else:
@@ -1129,7 +1065,7 @@ def read_and_normalize_dossier(sheet, region_map, internet_map):
         'aire': 'Televisión', 'cable': 'Televisión',
         'revista': 'Revistas', 'revistas': 'Revistas',
     }
-
+    
     if 'Tipo de Medio' in df.columns:
         df['Tipo de Medio'] = (
             df['Tipo de Medio'].astype(str).str.lower().str.strip()
@@ -1139,7 +1075,7 @@ def read_and_normalize_dossier(sheet, region_map, internet_map):
     else:
         df['Tipo de Medio'] = 'Otro'
 
-    is_av      = df['Tipo de Medio'].isin(['Radio', 'Televisión'])
+    is_av = df['Tipo de Medio'].isin(['Radio', 'Televisión'])
     is_grafica = df['Tipo de Medio'].isin(['Prensa', 'Internet', 'Revistas'])
     is_internet = df['Tipo de Medio'] == 'Internet'
 
@@ -1147,7 +1083,7 @@ def read_and_normalize_dossier(sheet, region_map, internet_map):
         raw_medios_clean = df['Medio'].astype(str).str.lower().str.strip()
         df['Región'] = raw_medios_clean.map(region_map).fillna("N/A")
     else:
-        df['Medio']  = 'N/A'
+        df['Medio'] = 'N/A'
         df['Región'] = 'N/A'
 
     if 'Medio' in df.columns:
@@ -1158,35 +1094,35 @@ def read_and_normalize_dossier(sheet, region_map, internet_map):
             .fillna(df.loc[is_internet, 'Medio'])
         )
 
-    df['ID Noticia']         = df.get('NoticiaId', df.get('ID Noticia', pd.Series(dtype=str)))
-    df['Fecha']              = pd.to_datetime(df.get('Fecha', pd.Series(dtype=str)), dayfirst=True, errors='coerce').dt.normalize()
-    df['Hora']               = df.get('Hora', pd.Series(dtype=str))
+    df['ID Noticia'] = df.get('NoticiaId', df.get('ID Noticia', pd.Series(dtype=str)))
+    df['Fecha'] = pd.to_datetime(df.get('Fecha', pd.Series(dtype=str)), dayfirst=True, errors='coerce').dt.normalize()
+    df['Hora'] = df.get('Hora', pd.Series(dtype=str))
     df['Sección - Programa'] = df.get('Sección - Programa', pd.Series(dtype=str)).astype(str).apply(clean_text)
-
+    
     titulo_col = 'Título' if 'Título' in df.columns else 'Titulo'
-    df['Título']             = df.get(titulo_col, pd.Series(dtype=str)).astype(str).apply(clean_text)
-    df['Autor - Conductor']  = df.get('Autor - Conductor', pd.Series(dtype=str)).astype(str).apply(clean_text)
-    df['Nro. Pagina']        = df.get('Nro. Pagina', pd.Series(dtype=str))
-
-    dim_col        = 'Dimensioncm2' if 'Dimensioncm2' in df.columns else 'Dimensión'
-    df['Dimensión']= df.get(dim_col, pd.Series(dtype=str))
+    df['Título'] = df.get(titulo_col, pd.Series(dtype=str)).astype(str).apply(clean_text)
+    df['Autor - Conductor'] = df.get('Autor - Conductor', pd.Series(dtype=str)).astype(str).apply(clean_text)
+    df['Nro. Pagina'] = df.get('Nro. Pagina', pd.Series(dtype=str))
+    
+    dim_col = 'Dimensioncm2' if 'Dimensioncm2' in df.columns else 'Dimensión'
+    df['Dimensión'] = df.get(dim_col, pd.Series(dtype=str))
     df['Duración - Nro. Caracteres'] = df.get('Duración - Nro. Caracteres', pd.Series(dtype=str))
 
-    df.loc[is_av, 'Dimensión']                  = df.loc[is_av, 'Duración - Nro. Caracteres']
+    df.loc[is_av, 'Dimensión'] = df.loc[is_av, 'Duración - Nro. Caracteres']
     df.loc[is_av, 'Duración - Nro. Caracteres'] = 0
 
-    cpe_av      = df.get('CPE',          pd.Series([np.nan] * len(df)))
+    cpe_av = df.get('CPE', pd.Series([np.nan] * len(df)))
     cpe_grafica = df.get('Valor de Nota', pd.Series([np.nan] * len(df)))
-    df['CPE']   = np.where(is_av, cpe_av, np.where(is_grafica, cpe_grafica, np.nan))
+    df['CPE'] = np.where(is_av, cpe_av, np.where(is_grafica, cpe_grafica, np.nan))
 
-    df['Tier']      = df.get('Tier',      pd.Series(dtype=str))
+    df['Tier'] = df.get('Tier', pd.Series(dtype=str))
     df['Audiencia'] = df.get('Audiencia', pd.Series(dtype=str))
-    df['Tono']      = df.get('Tono',      pd.Series(dtype=str)).astype(str).apply(clean_text)
-
-    df['Categoría']  = df.get('Categoría', df.get('Categoria', df.get('Tematica', df.get('Tema', pd.Series(dtype=str))))).astype(str).apply(clean_text)
+    df['Tono'] = df.get('Tono', pd.Series(dtype=str)).astype(str).apply(clean_text)
+    
+    df['Categoría'] = df.get('Categoría', df.get('Categoria', df.get('Tematica', df.get('Tema', pd.Series(dtype=str))))).astype(str).apply(clean_text)
     df['Narrativas'] = df.get('Narrativas', df.get('Narrativa', df.get('Subtema', pd.Series(dtype=str)))).astype(str).apply(clean_text)
 
-    cuerpo_col     = 'CuerpoEs' if 'CuerpoEs' in df.columns else 'Resumen - Aclaracion'
+    cuerpo_col = 'CuerpoEs' if 'CuerpoEs' in df.columns else 'Resumen - Aclaracion'
     cuerpo_cleaned = df.get(cuerpo_col, pd.Series([''] * len(df))).astype(str).apply(clean_cuerpo)
 
     def fmt_grafica(text):
@@ -1197,9 +1133,9 @@ def read_and_normalize_dossier(sheet, region_map, internet_map):
 
     df['Resumen - Aclaracion'] = np.where(is_av, cuerpo_cleaned, cuerpo_cleaned.apply(fmt_grafica))
 
-    url_nota_av   = df.get('URL Nota AV',  df.get('Link Nota AV', pd.Series([''] * len(df))))
+    url_nota_av = df.get('URL Nota AV', df.get('Link Nota AV', pd.Series([''] * len(df))))
     url_streaming = df.get('URL (Streaming - Imagen)', pd.Series([''] * len(df)))
-
+    
     link_nota_final = []
     for val_av, val_str, is_av_row in zip(url_nota_av, url_streaming, is_av):
         if is_av_row:
@@ -1214,10 +1150,10 @@ def read_and_normalize_dossier(sheet, region_map, internet_map):
                 link_nota_final.append(val_str)
             else:
                 link_nota_final.append({"value": "Link", "url": val_str if val_str else None})
-
+                
     df['Link Nota'] = link_nota_final
 
-    url_nota_raw    = df.get('URL Nota', pd.Series([''] * len(df)))
+    url_nota_raw = df.get('URL Nota', pd.Series([''] * len(df)))
     link_stream_final = []
     for val_url, is_int in zip(url_nota_raw, is_internet):
         if is_int:
@@ -1227,14 +1163,14 @@ def read_and_normalize_dossier(sheet, region_map, internet_map):
                 link_stream_final.append({"value": "Link", "url": val_url if val_url else None})
         else:
             link_stream_final.append(None)
-
+            
     df['Link (Streaming - Imagen)'] = link_stream_final
 
-    menciones_av      = df.get('Menciones - Empresa', pd.Series([''] * len(df))).fillna('').astype(str).apply(clean_text)
-    menciones_grafica = df.get('Empresa rel.',         pd.Series([''] * len(df))).fillna('').astype(str).apply(clean_text)
+    menciones_av = df.get('Menciones - Empresa', pd.Series([''] * len(df))).fillna('').astype(str).apply(clean_text)
+    menciones_grafica = df.get('Empresa rel.', pd.Series([''] * len(df))).fillna('').astype(str).apply(clean_text)
     df['Menciones - Empresa'] = np.where(is_av, menciones_av, np.where(is_grafica, menciones_grafica, menciones_av))
 
-    # Aplicar limpieza de menciones
+    # Aplicar la limpieza del prefijo "La Cardio 26 - "
     df['Menciones - Empresa'] = df['Menciones - Empresa'].apply(limpiar_mencion)
 
     return df
@@ -1253,28 +1189,29 @@ def generate_output_excel(rows, km):
     ]
     NUM = {"ID Noticia", "Nro. Pagina", "Dimensión", "Duración - Nro. Caracteres", "CPE", "Tier", "Audiencia"}
     ws.append(ORDER)
-
+    
     font_hyperlink = Font(color="0563C1", underline="single")
-    align_left     = Alignment(horizontal='left')
-    font_header    = Font(bold=True)
-
+    align_left = Alignment(horizontal='left')
+    font_header = Font(bold=True)
+    
     for i, col_name in enumerate(ORDER, start=1):
         cell = ws.cell(row=1, column=i)
         cell.font = font_header
 
     col_idx_map = {name: ORDER.index(name) + 1 for name in ORDER}
-
+        
     for row in rows:
         tk = km.get("titulo")
         if tk and tk in row: row[tk] = clean_title_for_output(row.get(tk))
         rk = km.get("resumen")
         if rk and rk in row: row[rk] = corregir_texto(row.get(rk))
-
+        
         out, links = [], {}
         for ci, h in enumerate(ORDER, start=1):
+            dk = km.get(norm_key(h), norm_key(h))
             val = row.get(h)
-            cv  = None
-
+            cv = None
+            
             if h == 'Fecha' and pd.notna(val):
                 if isinstance(val, pd.Timestamp):
                     cv = val.to_pydatetime()
@@ -1295,31 +1232,31 @@ def generate_output_excel(rows, km):
                     cv = str(val)
             out.append(cv)
         ws.append(out)
-
+        
         current_row = ws.max_row
         for ci, url in links.items():
             cell = ws.cell(row=current_row, column=ci)
             cell.hyperlink = url
-            cell.font      = font_hyperlink
+            cell.font = font_hyperlink
             cell.alignment = align_left
-
+            
         date_col_idx = ORDER.index("Fecha") + 1
-        date_cell    = ws.cell(row=current_row, column=date_col_idx)
+        date_cell = ws.cell(row=current_row, column=date_col_idx)
         if isinstance(date_cell.value, (datetime.datetime, datetime.date)):
             date_cell.number_format = 'DD/MM/YYYY'
-
+            
         cols_millares = ["Nro. Pagina", "Dimensión", "Duración - Nro. Caracteres", "Tier", "Audiencia"]
         for col_name in cols_millares:
             col_idx = col_idx_map[col_name]
-            cell    = ws.cell(row=current_row, column=col_idx)
+            cell = ws.cell(row=current_row, column=col_idx)
             if isinstance(cell.value, (int, float)):
                 cell.number_format = '#,##0'
 
-        cpe_idx  = col_idx_map["CPE"]
+        cpe_idx = col_idx_map["CPE"]
         cpe_cell = ws.cell(row=current_row, column=cpe_idx)
         if isinstance(cpe_cell.value, (int, float)):
             cpe_cell.number_format = '$#,##0'
-
+            
     for i, col_name in enumerate(ORDER, start=1):
         letter = ws.cell(row=1, column=i).column_letter
         if col_name in ['Título', 'Resumen - Aclaracion']:
@@ -1328,39 +1265,38 @@ def generate_output_excel(rows, km):
             ws.column_dimensions[letter].width = 15
         else:
             ws.column_dimensions[letter].width = 20
-
+            
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
 
+
 # ======================================
-# Proceso principal (Análisis Completo)
+# Proceso principal (Análisis Completo - Ejecución síncrona sin asyncio.run)
 # ======================================
-async def run_full_process_async(df_file, bn, ba, tpkl, epkl, mode,
-                                  xlsx_bytes=None, cliente="", voceros="", enable_scraping=False):
+def run_full_process(df_file, bn, ba, tpkl, epkl, mode, xlsx_bytes=None, cliente="", voceros="", enable_scraping=False):
     st.session_state.update({'tokens_input': 0, 'tokens_output': 0, 'tokens_embedding': 0})
     get_embedding_cache().clear()
     t0 = time.time()
-
+    
     if "API" in mode:
         try:
-            openai.api_key = st.secrets["OPENAI_API_KEY"]
-            openai.aiosession.set(None)
+            openai.api_key=st.secrets["OPENAI_API_KEY"]
         except:
             st.error("OPENAI_API_KEY no encontrado en st.secrets.")
             st.stop()
-
+            
     with st.status("Paso 1 · Carga de Configuración y Dossier", expanded=True) as s:
         config_path = load_local_config()
         if not config_path:
-            st.error("❌ No se encontró el archivo 'Configuracion.xlsx'.")
+            st.error("❌ No se encontró el archivo 'Configuracion.xlsx' en el repositorio. Asegúrate de incluirlo en la raíz.")
             st.stop()
-
+            
         region_map, internet_map = load_config(config_path)
-
-        wb_in         = load_workbook(df_file, data_only=True)
+        
+        wb_in = load_workbook(df_file, data_only=True)
         df_normalized = read_and_normalize_dossier(wb_in.active, region_map, internet_map)
-
+        
         # Expansión por ; en Menciones - Empresa
         rows_expanded = []
         for idx, row_series in df_normalized.iterrows():
@@ -1368,155 +1304,142 @@ async def run_full_process_async(df_file, bn, ba, tpkl, epkl, mode,
             if not menciones:
                 row_dict = row_series.to_dict()
                 row_dict['Menciones - Empresa'] = ""
-                row_dict['original_index']      = idx
-                row_dict['is_duplicate']        = False
+                row_dict['original_index'] = idx
+                row_dict['is_duplicate'] = False
                 rows_expanded.append(row_dict)
             else:
                 for m in menciones:
                     row_dict = row_series.to_dict()
                     row_dict['Menciones - Empresa'] = m
-                    row_dict['original_index']      = idx
-                    row_dict['is_duplicate']        = False
+                    row_dict['original_index'] = idx
+                    row_dict['is_duplicate'] = False
                     rows_expanded.append(row_dict)
 
         km = {
-            "idnoticia":          "ID Noticia",
-            "fecha":              "Fecha",
-            "hora":               "Hora",
-            "medio":              "Medio",
-            "tipodemedio":        "Tipo de Medio",
-            "seccion_programa":   "Sección - Programa",
-            "region":             "Región",
-            "titulo":             "Título",
-            "autor_conductor":    "Autor - Conductor",
-            "nro_pagina":         "Nro. Pagina",
-            "dimension":          "Dimensión",
-            "duracion_caracteres":"Duración - Nro. Caracteres",
-            "cpe":                "CPE",
-            "tier":               "Tier",
-            "audiencia":          "Audiencia",
-            "tono":               "Tono",
-            "tonoiai":            "Tono IA",
-            "tema":               "Categoría",
-            "categoria":          "Categoría",
-            "subtema":            "Narrativas",
-            "narrativas":         "Narrativas",
-            "link_nota":          "Link Nota",
-            "resumen":            "Resumen - Aclaracion",
-            "link_streaming":     "Link (Streaming - Imagen)",
-            "menciones":          "Menciones - Empresa",
-            "idduplicada":        "ID duplicada"
+            "idnoticia": "ID Noticia",
+            "fecha": "Fecha",
+            "hora": "Hora",
+            "medio": "Medio",
+            "tipodemedio": "Tipo de Medio",
+            "seccion_programa": "Sección - Programa",
+            "region": "Región",
+            "titulo": "Título",
+            "autor_conductor": "Autor - Conductor",
+            "nro_pagina": "Nro. Pagina",
+            "dimension": "Dimensión",
+            "duracion_caracteres": "Duración - Nro. Caracteres",
+            "cpe": "CPE",
+            "tier": "Tier",
+            "audiencia": "Audiencia",
+            "tono": "Tono",
+            "tonoiai": "Tono IA",
+            "tema": "Categoría",
+            "categoria": "Categoría",
+            "subtema": "Narrativas",
+            "narrativas": "Narrativas",
+            "link_nota": "Link Nota",
+            "resumen": "Resumen - Aclaracion",
+            "link_streaming": "Link (Streaming - Imagen)",
+            "menciones": "Menciones - Empresa",
+            "idduplicada": "ID duplicada"
         }
-
+        
         rows = detectar_duplicados_avanzado(rows_expanded, km)
         for row in rows:
             if row["is_duplicate"]:
-                row["Tono IA"]       = "Duplicada"
-                row[km["tema"]]      = "-"
-                row[km["subtema"]]   = "-"
-
+                row["Tono IA"] = "Duplicada"
+                row[km["tema"]] = "-"
+                row[km["subtema"]] = "-"
+                
         s.update(label="✓ Paso 1 completado", state="complete")
-
+        
     with st.status("Paso 2 · Normalización", expanded=True) as s:
         s.update(label="✓ Paso 2 · Mapeos y normalizaciones aplicados", state="complete")
-
+        
     gc.collect()
     ta = [r for r in rows if not r.get("is_duplicate")]
-
+    
     if ta:
         df = pd.DataFrame(ta)
         df["_txt"] = df.apply(
-            lambda r: texto_para_embedding(
-                str(r.get(km["titulo"], "")),
-                str(r.get(km["resumen"], ""))
-            ),
+            lambda r: texto_para_embedding(str(r.get(km["titulo"], "")), str(r.get(km["resumen"], ""))),
             axis=1
         )
         with st.status("Embeddings...", expanded=True) as s:
             _ = get_embeddings_batch(df["_txt"].tolist())
             s.update(label=f"✓ {get_embedding_cache().stats()}", state="complete")
-
+            
         with st.status("Paso 3 · Análisis Contextual Integrado (Tono, Categoría y Narrativas)", expanded=True) as s:
             pb = st.progress(0)
             if "API" in mode:
-                resultados_analisis = await ClasificadorNoticiasInteligente(bn, ba).procesar_lote_async(
-                    df["_txt"], pb,
-                    df[km["resumen"]],
-                    df[km["titulo"]],
-                    df[km["menciones"]]
+                # El análisis inteligente unificado evalúa tono, categoría y narrativa
+                # de forma integrada por cada combinación de contenido + mención de marca única
+                resultados_analisis = ClasificadorNoticiasInteligente(bn, ba).procesar_lote(
+                    df["_txt"], pb, df[km["resumen"]], df[km["titulo"]], df[km["menciones"]]
                 )
-                df[km["tonoiai"]] = [r["tono"]      for r in resultados_analisis]
-                df[km["tema"]]    = [r["categoria"]  for r in resultados_analisis]
-                df[km["subtema"]] = [r["narrativa"]  for r in resultados_analisis]
+                df[km["tonoiai"]] = [r["tono"] for r in resultados_analisis]
+                df[km["tema"]] = [r["categoria"] for r in resultados_analisis]
+                df[km["subtema"]] = [r["narrativa"] for r in resultados_analisis]
             else:
                 df[km["tonoiai"]] = "N/A"
-                df[km["tema"]]    = "Sector"
+                df[km["tema"]] = "Sector"
                 df[km["subtema"]] = "Otras"
             s.update(label="✓ Paso 3 · Análisis Contextual Integrado Completado", state="complete")
-
+            
         rm2 = df.set_index("original_index").to_dict("index")
         for idx, row in enumerate(rows):
             if not row.get("is_duplicate"):
                 row.update(rm2.get(row["original_index"], {}))
-
+                
     gc.collect()
     ci = (st.session_state['tokens_input']     / 1e6) * PRICE_INPUT_1M
     co = (st.session_state['tokens_output']    / 1e6) * PRICE_OUTPUT_1M
     ce = (st.session_state['tokens_embedding'] / 1e6) * PRICE_EMBEDDING_1M
-
+    
     with st.status("Paso 4 · Informe", expanded=True) as s:
         st.session_state["output_data"]     = generate_output_excel(rows, km)
-        st.session_state["output_filename"] = (
-            f"Informe_IA_{bn.replace(' ', '_')}_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
-        )
+        st.session_state["output_filename"] = f"Informe_IA_{bn.replace(' ', '_')}_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
         st.session_state["processing_complete"] = True
         st.session_state.update({
-            "brand_name":      bn,
-            "brand_aliases":   ba,
-            "total_rows":      len(rows),
-            "unique_rows":     len(ta),
-            "duplicates":      len(rows) - len(ta),
-            "process_duration":f"{time.time() - t0:.0f}s",
-            "process_cost":    f"${ci + co + ce:.4f} USD",
-            "cache_stats":     get_embedding_cache().stats()
+            "brand_name": bn, "brand_aliases": ba,
+            "total_rows": len(rows), "unique_rows": len(ta), "duplicates": len(rows) - len(ta),
+            "process_duration": f"{time.time() - t0:.0f}s",
+            "process_cost": f"${ci + co + ce:.4f} USD",
+            "cache_stats": get_embedding_cache().stats()
         })
         s.update(label=f"✓ Completado · {get_embedding_cache().stats()}", state="complete")
 
+
 # ======================================
-# Análisis Rápido
+# Análisis Rápido (Síncrono)
 # ======================================
-async def run_quick_async(df, tc, sc, bn, al):
+def run_quick(df, tc, sc, bn, al):
     st.session_state.update({'tokens_input': 0, 'tokens_output': 0, 'tokens_embedding': 0})
     get_embedding_cache().clear()
-
+    
+    # Aplicar la limpieza de menciones en análisis rápido si la columna existe
     if 'Menciones - Empresa' in df.columns:
         df['Menciones - Empresa'] = df['Menciones - Empresa'].apply(limpiar_mencion)
         menciones_col = df['Menciones - Empresa']
     else:
-        menciones_col = pd.Series([bn] * len(df))
+        menciones_col = pd.Series([bn]*len(df))
 
-    df['_txt'] = df.apply(
-        lambda r: texto_para_embedding(str(r.get(tc, "")), str(r.get(sc, ""))),
-        axis=1
-    )
-
+    df['_txt'] = df.apply(lambda r: texto_para_embedding(str(r.get(tc, "")), str(r.get(sc, ""))), axis=1)
+    
     with st.status("Embeddings...", expanded=True) as s:
         _ = get_embeddings_batch(df['_txt'].tolist())
         s.update(label=f"✓ {get_embedding_cache().stats()}", state="complete")
-
+        
     with st.status("Análisis Contextual Integrado", expanded=True) as s:
         pb = st.progress(0)
-        res = await ClasificadorNoticiasInteligente(bn, al).procesar_lote_async(
-            df["_txt"], pb,
-            df[sc].fillna(''),
-            df[tc].fillna(''),
-            menciones_col
+        res = ClasificadorNoticiasInteligente(bn, al).procesar_lote(
+            df["_txt"], pb, df[sc].fillna(''), df[tc].fillna(''), menciones_col
         )
-        df['Tono IA']    = [r["tono"]      for r in res]
-        df['Categoría']  = [r["categoria"] for r in res]
+        df['Tono IA'] = [r["tono"] for r in res]
+        df['Categoría'] = [r["categoria"] for r in res]
         df['Narrativas'] = [r["narrativa"] for r in res]
         s.update(label="✓ Análisis Contextual Integrado", state="complete")
-
+        
     df.drop(columns=['_txt'], inplace=True)
     ci = (st.session_state['tokens_input']     / 1e6) * PRICE_INPUT_1M
     co = (st.session_state['tokens_output']    / 1e6) * PRICE_OUTPUT_1M
@@ -1555,7 +1478,6 @@ def render_quick_tab():
                     del st.session_state[k]
             st.rerun()
         return
-
     if 'quick_df' not in st.session_state:
         st.markdown("Sube un Excel con columnas de título y resumen.")
         f = st.file_uploader("Excel", type=["xlsx"], label_visibility="collapsed", key="qu")
@@ -1567,32 +1489,26 @@ def render_quick_tab():
             except Exception as e:
                 st.error(f"Error: {e}")
     else:
-        st.success(f"{st.session_state.quick_name} cargado")
+        st.success(f"**{st.session_state.quick_name}** cargado")
         with st.form("qf"):
             cols = st.session_state.quick_df.columns.tolist()
             c1, c2 = st.columns(2)
             tc = c1.selectbox("Col. título",  cols, 0)
             sc = c2.selectbox("Col. resumen", cols, 1 if len(cols) > 1 else 0)
-            bn  = st.text_input("Marca",  value="La Cardio")
-            bat = st.text_input(
-                "Alias (;)",
-                value="Fundación CardioInfantil;LaCardio;Cardio Infantil;FVDL;Country;Santa Fe;Cardiovascular;Pablo Tobón;Valle de Lily;Shaio"
-            )
+            bn  = st.text_input("Marca",       value="La Cardio")
+            bat = st.text_input("Alias (;)",   value="Fundación CardioInfantil;LaCardio;Cardio Infantil;FVDL;Country;Santa Fe;Cardiovascular;Pablo Tobón;Valle de Lily;Shaio")
             if st.form_submit_button("Analizar", use_container_width=True, type="primary"):
                 if not bn:
                     st.error("Indica la marca.")
                 else:
                     try:
                         openai.api_key = st.secrets["OPENAI_API_KEY"]
-                        openai.aiosession.set(None)
                     except:
                         st.error("OPENAI_API_KEY no encontrada.")
                         st.stop()
                     al = [a.strip() for a in bat.split(";") if a.strip()]
                     with st.spinner("Procesando..."):
-                        st.session_state.quick_result = asyncio.run(
-                            run_quick_async(st.session_state.quick_df.copy(), tc, sc, bn, al)
-                        )
+                        st.session_state.quick_result = run_quick(st.session_state.quick_df.copy(), tc, sc, bn, al)
                     st.rerun()
         if st.button("Otro archivo"):
             for k in ('quick_df', 'quick_name', 'quick_result', 'quick_cost'):
@@ -1600,11 +1516,13 @@ def render_quick_tab():
                     del st.session_state[k]
             st.rerun()
 
+
 # ======================================
 # Entrada de la Aplicación
 # ======================================
 def main():
     load_custom_css()
+    init_session_state()  # Inicialización segura en tiempo de renderizado de Streamlit
     if not check_password(): return
 
     st.markdown("""
@@ -1612,7 +1530,7 @@ def main():
         <div class="app-header-icon">◈</div>
         <div class="app-header-text">
             <div class="app-header-title">Análisis de Noticias - Fundación CardioInfantil</div>
-            <div class="app-header-version">v18.2 · Realizado por Johnathan Cortés</div>
+            <div class="app-header-version">v18.1 · Realizado por Johnathan Cortés</div>
         </div>
         <div class="app-header-badge">IA</div>
     </div>""", unsafe_allow_html=True)
@@ -1624,13 +1542,8 @@ def main():
             st.markdown('<div class="sec-label">Configuración</div>', unsafe_allow_html=True)
             cl, cr = st.columns([3, 2])
             with cl:
-                bn  = st.text_input("Marca principal", value="La Cardio",
-                                    placeholder="Ej: La Cardio", key="bn")
-                bat = st.text_input(
-                    "Alias (separados por ;)",
-                    value="Fundación CardioInfantil;LaCardio;Cardio Infantil;FVDL;Country;Santa Fe;Cardiovascular;Pablo Tobón;Valle de Lily;Shaio",
-                    placeholder="Ej: FVDL;Country;Santa Fe", key="ba"
-                )
+                bn  = st.text_input("Marca principal", value="La Cardio", placeholder="Ej: La Cardio", key="bn")
+                bat = st.text_input("Alias (separados por ;)", value="Fundación CardioInfantil;LaCardio;Cardio Infantil;FVDL;Country;Santa Fe;Cardiovascular;Pablo Tobón;Valle de Lily;Shaio", placeholder="Ej: FVDL;Country;Santa Fe", key="ba")
             with cr:
                 mode = st.radio(
                     "Modo de análisis",
@@ -1655,12 +1568,9 @@ def main():
 
                 st.markdown(
                     f'<div class="cluster-info">'
-                    f'<b>Consistencia e Inteligencia de Marca</b> · '
-                    f'Noticias con título idéntico o muy similar reciben SIEMPRE el mismo Tono, Categoría y Narrativas · '
-                    f'Títulos tipo "Últimas noticias / Titulares de hoy" → Neutro / Sucesos / Otras · '
-                    f'Categorías: Sucesos, Core, Especialidades, Ranking, Sector, Reforma, Corporativo · '
-                    f'Narrativas: Sostenibilidad, Excelencia médica, Innovación + Desarrollo, Marca empleadora, Portafolio, Otras · '
-                    f'Limpieza del prefijo "La Cardio 26 - " en menciones.'
+                    f'<b>Consistencia e Inteligencia de Marca</b> · Categorías (Sucesos, Core, Especialidades, Ranking, Sector, Reforma, Corporativo) '
+                    f'· Narrativas (Sostenibilidad, Excelencia médica, Innovación + Desarrollo, Marca empleadora, Portafolio, Otras) '
+                    f'· Limpieza del prefijo "La Cardio 26 - " y homologación automática de la marca Country en menciones.'
                     f'</div>',
                     unsafe_allow_html=True
                 )
@@ -1669,12 +1579,11 @@ def main():
                     if not all([f1, bn.strip()]):
                         st.error("Por favor completa los campos requeridos e introduce un archivo de Dossier.")
                     else:
-                        al       = [a.strip() for a in bat.split(";") if a.strip()]
+                        al = [a.strip() for a in bat.split(";") if a.strip()]
                         cur_mode = st.session_state.get("mode", "API de OpenAI")
-                        asyncio.run(run_full_process_async(
-                            f1, bn, al, None, None, cur_mode,
-                            xlsx_bytes=None, cliente="", voceros="", enable_scraping=False
-                        ))
+                        run_full_process(f1, bn, al, None, None, cur_mode,
+                                         xlsx_bytes=None, cliente="", voceros="",
+                                         enable_scraping=False)
                         st.rerun()
         else:
             total = st.session_state.total_rows
@@ -1696,8 +1605,7 @@ def main():
               <div class="metric-card m-time"><div class="metric-val" style="color:var(--blue)">{dur}</div><div class="metric-lbl">Tiempo</div></div>
               <div class="metric-card m-cost"><div class="metric-val" style="color:var(--accent)">{cost}</div><div class="metric-lbl">Costo</div></div>
             </div>""", unsafe_allow_html=True)
-            if 'cache_stats' in st.session_state:
-                st.caption(f"📊 {st.session_state['cache_stats']}")
+            if 'cache_stats' in st.session_state: st.caption(f"📊 {st.session_state['cache_stats']}")
             c1, c2 = st.columns(2)
             c1.download_button(
                 "⬇ Descargar informe",
@@ -1717,7 +1625,7 @@ def main():
         render_quick_tab()
 
     st.markdown(
-        '<div class="footer">v18.2 · Análisis de Noticias con IA · Johnathan Cortés ©</div>',
+        '<div class="footer">v18.1 · Análisis de Noticias con IA · Johnathan Cortés ©</div>',
         unsafe_allow_html=True
     )
 
