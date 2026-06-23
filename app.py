@@ -654,9 +654,9 @@ def es_suceso_excluido_politica(titulo: str) -> bool:
         
     # Palabras clave y personajes para forzar a Sucesos / Otras
     patrones = [
-        "cesar gaviria", "gaviria", "expresidente", "Noticias en 60 Segundos",
-        "miguel uribe", "miguel uribe turbay", "Noticias en", "Un año desde la tragedia",
-        "caviria", "cavi ria", "caviria sigue hospitalizado", "cavi ria sigue hospitalizado",
+        "cesar gaviria", "gaviria", "expresidente", "Noticias en 60 Segundos","Yulixa Toloza",
+        "miguel uribe", "miguel uribe turbay", "Noticias en", "Un año desde la tragedia", "Una enfermera murió ",
+        "caviria", "cavi ria", "caviria sigue hospitalizado", "cavi ria sigue hospitalizado","Tragedia en",
         "wendy sepulveda", "noticias del", "noticias nacionales", "noticias en ",
         "atentado contra miguel uribe"
     ]
