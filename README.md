@@ -1,4 +1,3 @@
-
 ```markdown
 <div align="center">
 
@@ -248,7 +247,7 @@ La solución hace uso de los endpoints de la API de OpenAI optimizando el gasto 
 
 <div align="center">
 
-**Cardio-API · Inteligencia de Prensa & Reputación Médica**  
+**Cardio-API · Inteligencia de noticias**  
 *Johnathan Cortés © 2026*
 
 </div>
