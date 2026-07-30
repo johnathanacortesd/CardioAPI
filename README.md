@@ -1,6 +1,5 @@
-```markdown
-<div align="center">
 
+```markdown
 ```text
  ╔══════════════════════════════════════════════════════════════════════════════════════════════╗
  ║                                                                                              ║
@@ -16,12 +15,12 @@
  ╚══════════════════════════════════════════════════════════════════════════════════════════════╝
 ```
 
+<div align="center">
+
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?style=for-the-badge&logo=Streamlit&logoColor=white)](https://streamlit.io/)
 [![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4.1--nano-412991?style=for-the-badge&logo=openai&logoColor=white)](https://openai.com/)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![License](https://img.shields.io/badge/Licencia-Propietario-orange?style=for-the-badge)](LICENSE)
-
----
 
 ### ◈ Análisis Automatizado de Noticias y Reputación Institucional con IA
 
@@ -247,7 +246,7 @@ La solución hace uso de los endpoints de la API de OpenAI optimizando el gasto 
 
 <div align="center">
 
-**Cardio-API · Inteligencia de noticias**  
+**Cardio-API · Inteligencia de Prensa & Reputación Médica**  
 *Johnathan Cortés © 2026*
 
 </div>
