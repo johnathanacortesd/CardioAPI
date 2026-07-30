@@ -1,250 +1,248 @@
 ```text
- ╔══════════════════════════════════════════════════════════════════════════════════════════════╗
- ║                                                                                              ║
- ║    ██████╗██████╗ ██████╗ ██████╗ ██╗██████╗     █████╗ ██████╗ ██╗                          ║
- ║   ██╔════╝██╔══██╗██╔══██╗██╔══██╗██║██╔═══██╗   ██╔══██╗██╔══██╗██║                          ║
- ║   ██║     ███████║██████╔╝██║  ██║██║██║   ██║ - ███████║██████╔╝██║                          ║
- ║   ██║     ██╔══██║██╔══██╗██║  ██║██║██║   ██║   ██╔══██║██╔═══╝ ██║                          ║
- ║   ╚██████╗██║  ██║██║  ██║██████╔╝██║╚██████╔╝   ██║  ██║██║     ██║                          ║
- ║    ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ ╚═╝ ╚═════╝    ╚═╝  ╚═╝╚═╝     ╚═╝                          ║
- ║                                                                                              ║
- ║                    Plataforma de Inteligencia de Prensa & Reputación Médica                      ║
- ║                              Desarrollado para La Cardio (Colombia)                          ║
- ╚══════════════════════════════════════════════════════════════════════════════════════════════╝
+███████╗ ██████╗  ██╗
+██╔════╝██╔════╝  ██║
+█████╗  ██║       ██║
+██╔══╝  ██║       ██║
+██║     ╚██████╗  ██║
+╚═╝      ╚═════╝  ╚═╝
 ```
 
-<div align="center">
+> **Sistema de Inteligencia de Medios, Monitoreo Reputacional y Clasificación Contextual con IA para la Fundación CardioInfantil (La Cardio)**  
+> *Realizado por **Johnathan Cortés***
 
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?style=for-the-badge&logo=Streamlit&logoColor=white)](https://streamlit.io/)
-[![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4.1--nano-412991?style=for-the-badge&logo=openai&logoColor=white)](https://openai.com/)
-[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![License](https://img.shields.io/badge/Licencia-Propietario-orange?style=for-the-badge)](LICENSE)
-
-### ◈ Análisis Automatizado de Noticias y Reputación Institucional con IA
-
-**Realizado por Johnathan Cortés** · *Versión 18.2*
-
-</div>
+[![Live App](https://img.shields.io/badge/Streamlit_App-Online-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://cardio-api.streamlit.app/)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![OpenAI](https://img.shields.io/badge/OpenAI-API-412991?style=for-the-badge&logo=openai&logoColor=white)](https://openai.com)
+[![Status](https://img.shields.io/badge/Status-v18.2--Stable-brightgreen?style=for-the-badge)]()
 
 ---
 
-## 📖 Tabla de Contenidos
+## 🚀 App en Vivo
 
-1. [Acerca del Proyecto](#-acerca-del-proyecto)
-2. [Características Principales](#-características-principales)
-3. [Flujo de Procesamiento y Arquitectura](#-flujo-de-procesamiento-y-arquitectura)
-4. [Taxonomía de Clasificación](#-taxonomía-de-clasificación)
-5. [Requisitos Previos](#-requisitos-previos)
-6. [Instalación y Configuración](#-instalación-y-configuración)
-7. [Estructura del Proyecto](#-estructura-del-proyecto)
-8. [Modelos de IA y Costos](#-modelos-de-ia-y-costos)
-9. [Uso de la Aplicación](#-uso-de-la-aplicación)
+🔗 **Acceso a la plataforma web:** [https://cardio-api.streamlit.app/](https://cardio-api.streamlit.app/)
 
 ---
 
-## 🚀 Acerca del Proyecto
+## 📋 Tabla de Contenidos
 
-**Cardio-API** es una solución de analítica avanzada de medios desarrollada para la **Fundación CardioInfantil (La Cardio)** en Colombia. Su objetivo principal es automatizar el procesamiento, limpieza, deduplicación y análisis contextual reputacional de clipping de noticias provenientes de diversos tipos de medio: Prensa, Internet, Radio, Televisión y Revistas.
+- [Descripción General](#-descripción-general)
+- [Características Principales](#-características-principales)
+- [Flujo de Procesamiento](#-flujo-de-procesamiento)
+- [Requisitos e Instalación](#-requisitos-e-instalación)
+- [Configuración del Sistema](#-configuración-del-sistema)
+- [Estructura del Proyecto](#-estructura-del-proyecto)
+- [Taxonomía y Criterios de Clasificación](#-taxonomía-y-criterios-de-clasificación)
+- [Modos de Análisis](#-modos-de-análisis)
+- [Formato de Salida y Métricas](#-formato-de-salida-y-métricas)
 
-El sistema implementa un motor híbrido que combina **reglas heurísticas locales**, **embeddings vectoriales simétricos con caché** y **modelos de lenguaje generativo de última generación (GPT-4.1-nano)** para clasificar con precisión el tono reputacional, la categoría temática y la narrativa estratégica asignada a cada impacto de marca.
+---
+
+## 🏥 Descripción General
+
+**FCI (Análisis de Noticias - La Cardio)** es una plataforma web inteligente de procesamiento masivo, análisis reputacional y desduplicación de impactos noticiosos desarrollada para la **Fundación CardioInfantil (La Cardio)**.
+
+El sistema recibe dossieres de noticias en formato Excel (`.xlsx`), estandariza la información de medios y regiones, elimina publicaciones repetidas mediante algoritmos de similitud y clasifica automáticamente con modelos de **OpenAI** (`gpt-4.1-nano-2025-04-14` y `text-embedding-3-small`) el **Tono reputacional**, la **Categoría del servicio** y la **Narrativa estratégica** asociada a La Cardio o a instituciones competidoras.
 
 ---
 
 ## ✨ Características Principales
 
-* 📥 **Ingesta Inteligente de Dossiers:** Normalización automatizada de datos provenientes de archivos Excel de agencias de clipping.
-* 🧹 **Limpieza y Homologación:**
-  * Eliminación de prefijos/sufijos de archivo (`La Cardio 26 - `, etc.).
-  * Mapeo dinámico regional y de medios web mediante `Configuracion.xlsx`.
-  * Detección y homologación inteligente de sinónimos de marcas competidoras y aliadas (`FCV` $\leftrightarrow$ `Cardiovascular`, `Country` $\leftrightarrow$ `Clínica del Country`, `CardioInfantil` $\leftrightarrow$ `La Cardio`).
-* 🔍 **Deduplicación Multinivel:**
-  * Deduplicación estricta por URLs (Internet) y enlaces de streaming.
-  * Deduplicación por coincidencia de emisión broadcast (Medio + Franja Horaria en Radio/TV).
-  * Deduplicación por similitud de título utilizando `SequenceMatcher` y correspondencia de tokens Jaccard ($\ge 93\%$).
-* 🤖 **Análisis Contextual Inteligente (ThreadPoolExecutor Concurrent):**
-  * Procesamiento paralelo multi-hilo de alto rendimiento.
-  * Evaluación simultánea e integrada de **Tono**, **Categoría** y **Narrativa**.
-  * Filtros locales inmediatos para descartar boletines genéricos, noticias de tránsito/accidentes y coyuntura política ajena a temas de salud.
-* ⚡ **Optimización y Caché:**
-  * Caché vectorial en memoria (`EmbeddingCache` MD5) para minimizar consumo de la API de OpenAI.
-  * Agrupamiento previo por similitud de títulos para garantizar consistencia absoluta y reducir tokens procesados.
-* 📊 **Exportación Excel de Nivel Ejecutivo:**
-  * Formatos numéricos condicionales (Moneda CPE, millares en audiencias, hipervínculos funcionales y fechas estandarizadas).
+* ⚡ **Desduplicación Inteligente Multinivel**:
+  * **Prensa / Digital**: Comparación difusa (Fuzzy Matching) de títulos con `SequenceMatcher` (umbral 0.93) y Jaccard de tokens.
+  * **Internet**: Normalización y cruce exacto de enlaces web (`Link Nota`, `Link Streaming`).
+  * **Radio / Televisión**: Identificación de duplicados por coincidencia exacta de `(Mención, Medio, Hora)`.
+
+* 🧠 **Embeddings Semánticos y Caché de Alto Rendimiento**:
+  * Vectorización mediante `text-embedding-3-small` con sistema de caché en memoria (`EmbeddingCache`) basado en hashes MD5 para optimizar el consumo de tokens.
+  * Agrupamiento jerárquico (`AgglomerativeClustering`) y algoritmo **DSU (Disjoint Set Union)**.
+
+* 🏷️ **Clasificador Contextual con IA & Filtros Locales**:
+  * Integración con `gpt-4.1-nano-2025-04-14` ejecutado mediante procesamiento concurrente en multihilos (`ThreadPoolExecutor`).
+  * Homologación automática de marcas y sinónimos (ej: *Cardiovascular $\Leftrightarrow$ FCV*, *La Cardio $\Leftrightarrow$ CardioInfantil*, *Country $\Leftrightarrow$ Clínica del Country*).
+  * Reglas locales de descarte para boletines genéricos (*"Noticias en 60 segundos"*), accidentes de tránsito, obras viales o sucesos políticos ajenos al negocio de salud.
+
+* 🧹 **Limpieza Automática de Metadatos**:
+  * Eliminación del prefijo `"La Cardio 26 - "` en la columna de menciones de empresa.
+  * Corrección de tildes y eñes mediante diccionarios ortográficos (`_TILDE_MAP` y `_ENIE_MAP`).
+  * Limpieza de caracteres y etiquetas HTML (`html.unescape`).
+
+* 🔐 **Autenticación Integrada**:
+  * Control de acceso mediante contraseña configurable en `st.secrets`.
+
+* 📊 **Exportación Profesional a Excel**:
+  * Generación de reportes con hipervínculos funcionales activados.
+  * Aplicación de formatos numéricos para fechas (`DD/MM/YYYY`), millares (`#,##0`) y valores monetarios de nota/CPE (`$#,##0`).
 
 ---
 
-## 🏗 Flujo de Procesamiento y Arquitectura
+## 🔄 Flujo de Procesamiento
 
 ```text
-               ┌─────────────────────────────────────────┐
-               │    Entrada: Dossier de Noticias (.xlsx) │
-               └────────────────────┬────────────────────┘
-                                    │
-                                    ▼
-       ┌────────────────────────────────────────────────────────┐
-       │ 1. Normalización de Campos y Mapeo Regional/Internet   │
-       │    (Lectura de Configuracion.xlsx)                     │
-       └────────────────────────────┬───────────────────────────┘
-                                    │
-                                    ▼
-       ┌────────────────────────────────────────────────────────┐
-       │ 2. Deduplicación Multinivel                             │
-       │    - Coincidencia de URLs / Streaming                   │
-       │    - Broadcast (Medio + Hora)                          │
-       │    - Similitud de Títulos (SequenceMatcher >= 0.93)    │
-       └────────────────────────────┬───────────────────────────┘
-                                    │
-                                    ▼
-       ┌────────────────────────────────────────────────────────┐
-       │ 3. Agrupamiento por Títulos Homólogos                  │
-       │    - Generación de Embeddings (text-embedding-3-small) │
-       │    - Búsqueda en EmbeddingCache en memoria            │
-       └────────────────────────────┬───────────────────────────┘
-                                    │
-                                    ▼
-       ┌────────────────────────────────────────────────────────┐
-       │ 4. Clasificación Contextual Inteligente                │
-       │    - Exclusión Local (Tránsito, Política, Boletines)   │
-       │    - Evaluación Paralela LLM (gpt-4.1-nano-2025-04-14) │
-       └────────────────────────────┬───────────────────────────┘
-                                    │
-                                    ▼
-               ┌─────────────────────────────────────────┐
-               │  Salida: Informe Formateado (.xlsx)     │
-               └─────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                   1. DOSSIER ENTRADA (.XLSX)                    │
+│    Lectura de celdas, extracción de links y normalización UTF8  │
+└────────────────────────────────┬────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                 2. MAPEO REGIONAL & INTERNET                    │
+│     Cruce dinámico con diccionario local (Configuracion.xlsx)    │
+└────────────────────────────────┬────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                 3. DESDUPLICACIÓN MULTINIVEL                    │
+│  Filtro por URL streaming, horario de emisión y fuzzy de título │
+└────────────────────────────────┬────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                4. AGRUPAMIENTO Y EMBEDDINGS                     │
+│    Vectorización semántica (OpenAI) + Agrupamiento por Títulos  │
+└────────────────────────────────┬────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                5. ANÁLISIS INTEGRADO (LLM + REGLAS)             │
+│   Multihilo síncrono para evaluar Tono, Categoría y Narrativa   │
+└────────────────────────────────┬────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   6. INFORME FINAL EXCEL                        │
+│   Aplicación de estilos, hipervínculos y métricas de costo/tiempo│
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🏷 Taxonomía de Clasificación
+## 🛠️ Requisitos e Instalación
 
-El sistema evalúa cada impacto bajo tres ejes principales:
+### Pre-requisitos
+* **Python 3.10** o superior.
+* API Key de OpenAI habilitada.
 
-### 1. Tono Reputacional
-| Tono | Criterio de Asignación |
-| :--- | :--- |
-| **Positivo** | Galardones, acreditaciones (Joint Commission International), avances científicos, cirugías exitosas o hitos en salud. |
-| **Negativo** | Demandas, fallas operativas o clínicas, quejas directas o crisis reputacionales. |
-| **Neutro** | Menciones contextuales de marco sectorial, referencias secundarias o datos informativos. |
-
-### 2. Categoría Institucional
-* 🏥 **Core:** Servicios enfocados en la estrategia cardiovascular y trasplantes (exclusivo para la marca).
-* 🩺 **Especialidades:** Oncología, pediatría, neurología, ortopedia, urgencias, entre otras.
-* 🏆 **Ranking:** Posicionamiento en monitores de reputación (Merco, América Economía, P&M).
-* 🏛 **Reforma:** Proyectos de ley, discusiones en el Congreso y regulaciones a la salud.
-* 💼 **Sector:** Situación financiera de EPS, embargos, decisiones de Minsalud y Supersalud.
-* 🤝 **Corporativo:** Alianzas, asambleas de socios, eventos institucionales (ej. Latidos Futuros).
-* 🚨 **Sucesos:** Hechos fortuitos o cierres viales vinculados por cercanía geográfica.
-
-### 3. Narrativas Estratégicas
-* 🌿 **Sostenibilidad:** Responsabilidad social, brigadas médicas, voluntariado, donaciones.
-* 🥇 **Excelencia Médica:** Reacreditación de calidad, experiencia clínica de alta complejidad.
-* 💡 **Innovación + Desarrollo:** Investigaciones (Nature Index), nuevos equipos, patentes.
-* 👥 **Marca Empleadora:** Logros y bienestar de colaboradores y cuerpo médico.
-* 📋 **Portafolio:** Consejos de salud, promoción de la salud y prevención de la enfermedad.
-* 📂 **Otras:** Referencial general o menciones de contexto no estratégico.
-
----
-
-## ⚙️ Requisitos Previos
-
-* **Python:** 3.10 o superior.
-* **API Key de OpenAI:** Requerida para generar los embeddings vectoriales y la clasificación LLM.
-* **Archivo de Configuración:** Archivo Excel `Configuracion.xlsx` ubicado en la raíz del proyecto.
-
----
-
-## 📦 Instalación y Configuración
+### Pasos para Ejecución Local
 
 1. **Clonar el repositorio:**
    ```bash
-   git clone https://github.com/tu-usuario/cardio-api.git
-   cd cardio-api
+   git clone https://github.com/tu-usuario/FC-API.git
+   cd FC-API
    ```
 
-2. **Crear y activar un entorno virtual:**
+2. **Crear y activar el entorno virtual:**
    ```bash
-   # En Linux / macOS
+   # En macOS/Linux:
    python3 -m venv venv
    source venv/bin/activate
 
-   # En Windows
+   # En Windows:
    python -m venv venv
    venv\Scripts\activate
    ```
 
 3. **Instalar dependencias:**
    ```bash
-   pip install -r requirements.txt
-   ```
-   *(O instalación directa de librerías clave:)*
-   ```bash
-   pip install streamlit pandas openpyxl openai scikit-learn unidecode numpy requests
+   pip install streamlit pandas openpyxl openai unidecode numpy scikit-learn joblib requests
    ```
 
-4. **Configurar los secretos de Streamlit (`.streamlit/secrets.toml`):**
-   Crea la carpeta `.streamlit` en la raíz y añade el archivo `secrets.toml`:
-   ```toml
-   OPENAI_API_KEY = "sk-proj-tu-api-key-aqui"
-   APP_PASSWORD = "admin123"  # Contraseña de acceso a la interfaz web
-   ```
-
-5. **Verificar el archivo `Configuracion.xlsx`:**
-   Debe contener las pestañas con la siguiente estructura:
-   * **`Regiones`**: Columna A (Nombre del medio) | Columna B (Región).
-   * **`Internet`**: Columna A (Medio fuente) | Columna B (Nombre normalizado).
-
-6. **Ejecutar la aplicación:**
+4. **Ejecutar la aplicación:**
    ```bash
    streamlit run app.py
    ```
 
 ---
 
-## 📂 Estructura del Proyecto
+## ⚙️ Configuración del Sistema
+
+### 1. Variables Secretas (`.streamlit/secrets.toml`)
+
+Crea la carpeta `.streamlit` en la raíz del proyecto y agrega el archivo `secrets.toml`:
+
+```toml
+OPENAI_API_KEY = "sk-proj-tu-api-key-de-openai-aqui"
+APP_PASSWORD = "tu_contraseña_de_acceso"
+```
+
+> **Nota:** Si no se define `APP_PASSWORD`, la aplicación utilizará por defecto `admin123`.
+
+### 2. Archivo de Mapeo de Medios (`Configuracion.xlsx`)
+
+El sistema consulta el archivo `Configuracion.xlsx` en la raíz para asociar automáticamente los medios con su ubicación geográfica y canal correspondiente. Debe contener dos hojas:
+* **Regiones**: Mapeo `Medio` $\rightarrow$ `Región`.
+* **Internet**: Normalización de nombres de portales web.
+
+---
+
+## 📁 Estructura del Proyecto
 
 ```text
-cardio-api/
+FC-API/
 ├── .streamlit/
-│   └── secrets.toml          # Secretos (API Key de OpenAI y password de acceso)
-├── app.py                    # Aplicación principal Streamlit & Engine
-├── Configuracion.xlsx        # Mapeo de Regiones y Medios de Internet
-├── README.md                 # Documentación del proyecto
-└── requirements.txt          # Dependencias del proyecto
+│   └── secrets.toml         # Variables de entorno y credenciales (OpenAI/Password)
+├── app.py                   # Aplicación principal Streamlit e integración de IA
+├── Configuracion.xlsx       # Matriz de consulta Medio -> Región / Internet
+├── README.md                # Documentación del repositorio
+└── requirements.txt         # Lista de dependencias del proyecto
 ```
 
 ---
 
-## 🤖 Modelos de IA y Estructura de Costos
+## 🏷️ Taxonomía y Criterios de Clasificación
 
-La solución hace uso de los endpoints de la API de OpenAI optimizando el gasto de tokens:
+### **1. Tono Reputacional (`Tono IA`)**
+* 🟢 **Positivo**: Reconocimientos, acreditaciones internacionales (JCI), avances médicos, cirugías exitosas o aportes científicos.
+* 🔴 **Negativo**: Demandas, fallas operativas, quejas médicas o afectación directa a la reputación corporativa.
+* ⚪ **Neutro**: Menciones referenciales, contexto de sector o informaciones sin sesgo implícito.
+* ⬛ **Duplicada**: Filas identificadas como copias de otra noticia ya procesada.
 
-| Componente | Modelo Utilizado | Costo Estimado / 1M Tokens |
-| :--- | :--- | :--- |
-| **Embeddings Vectoriales** | `text-embedding-3-small` | $0.02 USD |
-| **Clasificación Contextual** | `gpt-4.1-nano-2025-04-14` | $0.10 USD (Input) / $0.40 USD (Output) |
+### **2. Categorías (`Categoría`)**
+| Categoría | Descripción / Criterio |
+| :--- | :--- |
+| **Core** | Servicios enfocados en el core cardiovascular y trasplantes (ej. *Infarto, Arritmias, Marcapasos, Válvulas*). |
+| **Especialidades** | Otras áreas médicas de la institución (ej. *Neurología, Pediatría, Oncología, Urgencias*). |
+| **Ranking** | Posicionamiento en escalafones de reputación y calidad (ej. *Merco, América Economía, P&M*). |
+| **Reforma** | Proyectos de ley, debates normativos y regulaciones del sector (ej. *Reforma a la Salud, Minsalud*). |
+| **Sector** | Coyuntura del sistema de salud, crisis de EPS, embargos o contexto general de clínicas. |
+| **Corporativo** | Alianzas, asambleas de socios, acreditaciones, convenios o eventos institucionales. |
+| **Sucesos** | Noticia donde se cita la marca por cercanía geográfica pero ajena al negocio (ej. *Atracos, cierres viales*). |
 
-> 💡 **Ahorro de Tokens:** Mediante el agrupamiento previo por similitud de títulos y el uso de caché en memoria (`EmbeddingCache`), el gasto total por dossier se reduce entre un **60% y un 80%**.
+### **3. Narrativas Estratégicas (`Narrativas`)**
+| Narrativa | Descripción / Criterio |
+| :--- | :--- |
+| **Excelencia médica** | Experticia clínica, alta complejidad, calidad en la atención y acreditación internacional. |
+| **Innovación + Desarrollo** | Tecnología de punta, robótica (Da Vinci), investigación (Nature Index), patentes y telemedicina. |
+| **Sostenibilidad** | Acciones de responsabilidad social, brigadas médicas, voluntariado y proyectos con propósito. |
+| **Marca empleadora** | Reconocimiento a colaboradores, médicos "Orgullo Cardio", bienestar y talento humano. |
+| **Portafolio** | Chequeos ejecutivos, prevenciones de salud, nutrición y recomendaciones de vida saludable. |
+| **Otras** | Menciones puramente referenciales o menciones secundarias. |
 
 ---
 
-## 🖥 Uso de la Aplicación
+## 💻 Modos de Análisis
 
-1. **Ingreso:** Autentícate con la contraseña definida en `secrets.toml`.
-2. **Pestaña "Análisis Completo":**
-   * Configura la **Marca principal** (ej: `La Cardio`) y sus **Alias** (ej: `Fundación CardioInfantil;LaCardio;Cardio Infantil;FVDL;Country`).
-   * Selecciona el modo `API de OpenAI`.
-   * Carga el archivo `.xlsx` del Dossier.
-   * Haz clic en **`▶ Iniciar análisis`**.
-   * Revisa la tabla de métricas (Noticias Totales, Únicas, Duplicadas, Tiempo y Costo estimado en USD) y descarga el informe generado.
-3. **Pestaña "Análisis Rápido":**
-   * Permite procesar archivos Excel genéricos seleccionando manualmente las columnas de título y resumen para obtener análisis express.
+1. **Análisis Completo**:
+   * Procesa el dossier completo de prensa en formato Excel oficial.
+   * Aplica desduplicación multinivel por URL, horario y título.
+   * Asigna mapeos regionales, estilos visuales e hipervínculos funcionales en el reporte final.
+   * Genera un informe detallado de costos y tokens consumidos.
+
+2. **Análisis Rápido**:
+   * Permite evaluar rápidamente datasets simples seleccionando únicamente las columnas de `Título` y `Resumen`.
 
 ---
 
-<div align="center">
+## 📊 Formato de Salida y Métricas
 
-**Cardio-API · Inteligencia de Prensa & Reputación Médica**  
-*Johnathan Cortés © 2026*
+Al finalizar la ejecución, la aplicación muestra métricas clave del proceso:
+* **Total de Filas Procesadas**
+* **Noticias Únicas vs. Duplicadas**
+* **Tiempo Total de Procesamiento**
+* **Costo Estimado en API (USD)**
+* **Tasa de Eficiencia de Caché de Embeddings**
 
-</div>
+---
+
+<p align="center">
+  <sub>Desarrollado para la <b>Fundación CardioInfantil (La Cardio)</b> por <b>Johnathan Cortés</b> | App: <a href="https://cardio-api.streamlit.app/">cardio-api.streamlit.app</a></sub>
+</p>
