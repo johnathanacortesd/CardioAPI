@@ -33,8 +33,6 @@ Esta aplicación construida en **Streamlit** automatiza el análisis de reputaci
 - **Categoría** de involucramiento institucional (Sucesos, Core, Especialidades, Ranking, Sector, Reforma, Corporativo)
 - **Narrativa** estratégica del mensaje (Sostenibilidad, Excelencia médica, Innovación + Desarrollo, Marca empleadora, Portafolio, Otras)
 
-El sistema está diseñado para operar sobre grandes volúmenes de noticias, garantizando **consistencia absoluta** entre artículos con títulos o contenidos casi idénticos, y aplicando reglas heurísticas locales para casos especiales (titulares genéricos, sucesos ajenos a salud, coyuntura política).
-
 ---
 
 ## ✨ Características principales
