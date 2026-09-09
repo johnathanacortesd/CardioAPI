@@ -1,17 +1,17 @@
 ```
-███████╗ ██████╗██╗    █████╗ ██████╗ ██╗
-██╔════╝██╔════╝██║   ██╔══██╗██╔══██╗██║
-█████╗  ██║     ██║   ███████║██████╔╝██║
-██╔══╝  ██║     ██║   ██╔══██║██╔═══╝ ██║
-██║     ╚██████╗██║   ██║  ██║██║     ██║
-╚═╝      ╚═════╝╚═╝   ╚═╝  ╚═╝╚═╝     ╚═╝
+ ██████╗  █████╗  ██████╗  ██████╗  ██╗  ██████╗   █████╗  ██████╗  ██╗
+██╔════╝ ██╔══██╗ ██╔══██╗ ██╔══██╗ ██║ ██╔═══██╗ ██╔══██╗ ██╔══██╗ ██║
+██║      ███████║ ██████╔╝ ██║  ██║ ██║ ██║   ██║ ███████║ ██████╔╝ ██║
+██║      ██╔══██╗ ██╔══██╗ ██║  ██║ ██║ ██║   ██║ ██╔══██╗ ██╔═══╝  ██║
+╚██████╗ ██║  ██║ ██║  ██║ ██████╔╝ ██║ ╚██████╔╝ ██║  ██║ ██║      ██║
+ ╚═════╝ ╚═╝  ╚═╝ ╚═╝  ╚═╝ ╚═════╝  ╚═╝  ╚═════╝  ╚═╝  ╚═╝ ╚═╝      ╚═╝
 ```
 
 <div align="center">
 
-# Análisis de Noticias · Fundación CardioInfantil
+# CardioAPI · Análisis de Noticias
 
-**Motor de reputación y clasificación de prensa impulsado por IA**
+**Motor de reputación y clasificación de prensa impulsado por IA para la Fundación CardioInfantil**
 
 [![Streamlit](https://img.shields.io/badge/Streamlit-App-FF4B4B?logo=streamlit&logoColor=white)](https://cardio-api.streamlit.app/)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
@@ -27,7 +27,7 @@
 
 ## 📋 Descripción
 
-Esta aplicación construida en **Streamlit** automatiza el análisis de reputación de prensa para la **Fundación CardioInfantil (La Cardio)** y su ecosistema de marcas asociadas. A partir de dossiers de monitoreo de medios (prensa, radio, televisión, internet y revistas), la herramienta aplica un pipeline de IA para determinar, por cada mención de marca:
+**CardioAPI** es una aplicación **Streamlit** que automatiza el análisis de reputación de prensa para la **Fundación CardioInfantil (La Cardio)** y su ecosistema de marcas asociadas. A partir de dossiers de monitoreo de medios (prensa, radio, televisión, internet y revistas), aplica un pipeline de IA para determinar, por cada mención de marca:
 
 - **Tono** de reputación (Positivo / Negativo / Neutro)
 - **Categoría** de involucramiento institucional (Sucesos, Core, Especialidades, Ranking, Sector, Reforma, Corporativo)
@@ -35,16 +35,18 @@ Esta aplicación construida en **Streamlit** automatiza el análisis de reputaci
 
 ---
 
-## ✨ Características principales
+## ✨ Funciones actuales
 
-- 🏥 **Clasificador contextual multi-marca** — Detecta menciones de "La Cardio" y marcas relacionadas (Country, Cardiovascular/FCV, Santa Fe, Shaio, etc.) mediante un diccionario de sinónimos, evaluando el tono específico hacia cada entidad.
-- 🧩 **Agrupamiento estricto por título + mención** — Combina similitud de texto (`SequenceMatcher` + Jaccard de tokens) con normalización de acentos para asegurar que noticias homólogas reciban idéntica clasificación.
+- 🏥 **Clasificador contextual multi-marca** — Detecta menciones de "La Cardio" y marcas relacionadas (Country, Cardiovascular/FCV, Santa Fe, Shaio, etc.) mediante un diccionario de sinónimos, evaluando el tono, la categoría y la narrativa específicos hacia cada entidad.
+- 🧩 **Agrupamiento estricto por título + mención** — Combina similitud de texto (`SequenceMatcher` + Jaccard de tokens) con normalización de acentos para que noticias homólogas reciban la misma clasificación.
 - ⚡ **Procesamiento paralelo** — Utiliza `ThreadPoolExecutor` para ejecutar múltiples llamadas a la API de OpenAI de forma simultánea y estable dentro de Streamlit.
 - 🧠 **Caché de embeddings con hash MD5** — Evita recalcular vectores para textos ya procesados, reduciendo costo y tiempo de ejecución.
-- 🚫 **Filtros heurísticos locales** — Excluye automáticamente titulares de "última hora", boletines genéricos, sucesos viales/accidentes y coyuntura política ajena al sector salud, sin necesidad de invocar la IA.
-- 🔍 **Detección avanzada de duplicados** — Combina URL normalizada, medio + mención, y similitud de título, diferenciando lógica para medios impresos/digitales vs. radio y televisión.
+- 🚫 **Filtros heurísticos locales** — Excluye titulares de "última hora", boletines genéricos, sucesos viales/accidentes y coyuntura política ajena al sector salud, sin invocar la IA.
+- 🔍 **Detección avanzada de duplicados** — Combina URL normalizada, medio + mención y similitud de título, con lógica distinta para impresos/digitales frente a radio y televisión.
+- 🧹 **Limpieza y homologación de menciones** — Quita el prefijo `La Cardio 26 - ` y homologa automáticamente la marca Country; expande filas cuando hay varias menciones separadas por `;`.
+- 🗺️ **Mapeo de medios** — Usa `Configuracion.xlsx` (hojas `Regiones` e `Internet`) para asignar región y tipo de medio al dossier institucional.
 - 🔐 **Acceso protegido por contraseña** — Autenticación simple vía `st.secrets` con fallback local para desarrollo.
-- 💰 **Estimador de costos en tiempo real** — Calcula el gasto en tokens de entrada, salida y embeddings por cada corrida.
+- 💰 **Estimador de costos en tiempo real** — Calcula el gasto en tokens de entrada, salida y embeddings por cada corrida, junto con métricas de total, únicas, duplicados y duración.
 - 📥 **Dos modos de uso** — *Análisis Completo* (dossier estructurado, formato institucional) y *Análisis Rápido* (cualquier Excel con columnas de título/resumen).
 - 🎨 **Interfaz moderna estilo Material** — Diseño personalizado con tipografía Google Sans, tarjetas de métricas y estados de progreso por pasos.
 
@@ -79,8 +81,8 @@ Esta aplicación construida en **Streamlit** automatiza el análisis de reputaci
 ## ⚙️ Configuración local (desarrollo)
 
 ```bash
-git clone <url-del-repositorio>
-cd analisis-cardio
+git clone https://github.com/johnathanacortesd/CardioAPI.git
+cd CardioAPI
 pip install -r requirements.txt
 ```
 
@@ -106,8 +108,10 @@ streamlit run app.py
 **Categorías institucionales:**
 `Sucesos` · `Core` · `Especialidades` · `Ranking` · `Sector` · `Reforma` · `Corporativo`
 
-**Narrativas estratégicas:**
+**Narrativas estratégicas (en main):**
 `Sostenibilidad` · `Excelencia médica` · `Innovación + Desarrollo` · `Marca empleadora` · `Portafolio` · `Obras` · `Otras`
+
+`Obras` cubre construcción, ampliación, remodelación o infraestructura física de LaCardio (por ejemplo, ampliación de la torre quirúrgica o remodelación de urgencias). No se confunde con la categoría `Sucesos`, que sigue reservada a eventos ajenos al negocio (cierres u obras *viales* por cercanía geográfica).
 
 ---
 
@@ -119,6 +123,6 @@ Desarrollado por **Johnathan Cortés** para **GlobalNews Group**, como parte de 
 
 <div align="center">
 
-*Análisis de Noticias · Fundación CardioInfantil · GlobalNews Group*
+*CardioAPI · Análisis de Noticias · Fundación CardioInfantil · GlobalNews Group*
 
 </div>
