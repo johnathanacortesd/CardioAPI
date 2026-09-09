@@ -880,11 +880,12 @@ class ClasificadorNoticiasInteligente:
             f"- Innovación + Desarrollo: Contenido relacionado con novedades, investigación, apertura de servicios, innovación en equipos y tratamientos realizados por '{marca_target}'. Ej: Producción científica Nature Index 2025.\n"
             f"- Marca empleadora: Contenido relacionado a las acciones, bienestar, perfiles y logros de nuestros colaboradores. Ej: Jaime Fernandez, reconocido médico es orgullo cardio.\n"
             f"- Portafolio: Contenido relacionado con los diferentes servicios médicos generales o consejos de hábitos saludables. Ej: Beneficios de la actividad física.\n"
+            f"- Obras: Construcción, ampliación, remodelación o infraestructura física de LaCardio. Ej: Ampliación de la torre quirúrgica, remodelación de urgencias.\n"
             f"- Otras: Contenido relacionado con los diferentes servicios médicos pero de carácter puramente referencial, marketing sensorial o menciones secundarias. Ej: Referencial, Marketing sensorial.\n\n"
             f"Genera estrictamente un objeto JSON plano sin introducciones ni marcas de formato secundarias, exactamente de esta forma:\n"
             f'{{"tono": "Positivo|Negativo|Neutro", '
             f'"categoria": "Sucesos|Core|Especialidades|Ranking|Sector|Reforma|Corporativo", '
-            f'"narrativa": "Sostenibilidad|Excelencia médica|Innovación + Desarrollo|Marca empleadora|Portafolio|Otras"}}'
+            f'"narrativa": "Sostenibilidad|Excelencia médica|Innovación + Desarrollo|Marca empleadora|Portafolio|Obras|Otras"}}'
         )
 
         try:
@@ -909,7 +910,7 @@ class ClasificadorNoticiasInteligente:
             
             valid_tonos = {"Positivo", "Negativo", "Neutro"}
             valid_cats = {"Sucesos", "Core", "Especialidades", "Ranking", "Sector", "Reforma", "Corporativo"}
-            valid_nars = {"Sostenibilidad", "Excelencia médica", "Innovación + Desarrollo", "Marca empleadora", "Portafolio", "Otras"}
+            valid_nars = {"Sostenibilidad", "Excelencia médica", "Innovación + Desarrollo", "Marca empleadora", "Portafolio", "Obras", "Otras"}
             
             if tono not in valid_tonos: tono = "Neutro"
             if cat not in valid_cats: cat = "Sector"
@@ -917,6 +918,7 @@ class ClasificadorNoticiasInteligente:
                 if "innovacion" in nar.lower() or "desarrollo" in nar.lower(): nar = "Innovación + Desarrollo"
                 elif "excelencia" in nar.lower(): nar = "Excelencia médica"
                 elif "marca" in nar.lower() or "empleador" in nar.lower(): nar = "Marca empleadora"
+                elif nar.lower() in ("obras", "obra") or "construc" in nar.lower() or "ampliac" in nar.lower() or "remodelac" in nar.lower() or "infraestructura" in nar.lower(): nar = "Obras"
                 else: nar = "Otras"
                 
             return {"tono": tono, "categoria": cat, "narrativa": nar}
@@ -1062,6 +1064,7 @@ class ClasificadorNoticiasInteligente:
         inn_kw = ["innovación", "innovacion", "desarrollo", "nature index", "investigación", "investigacion", "tecnología", "tecnologia", "patente", "telemedicina", "da vinci", "robot", "innovadoras"]
         emp_kw = ["colaborador", "empleado", "orgullo cardio", "talento humano", "bienestar", "enfermera", "médico es orgullo", "medico es orgullo"]
         port_kw = ["actividad física", "actividad fisica", "chequeo", "consejos de salud", "vacunación", "vacunacion", "nutrición", "nutricion"]
+        obras_kw = ["construcción", "construccion", "ampliación", "ampliacion", "remodelación", "remodelacion", "infraestructura física", "infraestructura fisica", "obra civil", "nueva torre", "nueva sede"]
         
         matched_nar = None
         if any(k in t_r for k in sost_kw): matched_nar = "Sostenibilidad"
@@ -1069,6 +1072,7 @@ class ClasificadorNoticiasInteligente:
         elif any(k in t_r for k in inn_kw): matched_nar = "Innovación + Desarrollo"
         elif any(k in t_r for k in emp_kw): matched_nar = "Marca empleadora"
         elif any(k in t_r for k in port_kw): matched_nar = "Portafolio"
+        elif any(k in t_r for k in obras_kw): matched_nar = "Obras"
         else: matched_nar = "Otras"
         
         return matched_cat, matched_nar
@@ -1686,7 +1690,7 @@ def main():
                 st.markdown(
                     f'<div class="cluster-info">'
                     f'<b>Consistencia e Inteligencia de Marca</b> · Categorías (Sucesos, Core, Especialidades, Ranking, Sector, Reforma, Corporativo) '
-                    f'· Narrativas (Sostenibilidad, Excelencia médica, Innovación + Desarrollo, Marca empleadora, Portafolio, Otras) '
+                    f'· Narrativas (Sostenibilidad, Excelencia médica, Innovación + Desarrollo, Marca empleadora, Portafolio, Obras, Otras) '
                     f'· Limpieza del prefijo "La Cardio 26 - " y homologación automática de la marca Country en menciones.'
                     f'</div>',
                     unsafe_allow_html=True

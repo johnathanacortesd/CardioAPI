@@ -31,7 +31,7 @@ Esta aplicación construida en **Streamlit** automatiza el análisis de reputaci
 
 - **Tono** de reputación (Positivo / Negativo / Neutro)
 - **Categoría** de involucramiento institucional (Sucesos, Core, Especialidades, Ranking, Sector, Reforma, Corporativo)
-- **Narrativa** estratégica del mensaje (Sostenibilidad, Excelencia médica, Innovación + Desarrollo, Marca empleadora, Portafolio, Otras)
+- **Narrativa** estratégica del mensaje (Sostenibilidad, Excelencia médica, Innovación + Desarrollo, Marca empleadora, Portafolio, Obras, Otras)
 
 ---
 
@@ -107,7 +107,7 @@ streamlit run app.py
 `Sucesos` · `Core` · `Especialidades` · `Ranking` · `Sector` · `Reforma` · `Corporativo`
 
 **Narrativas estratégicas:**
-`Sostenibilidad` · `Excelencia médica` · `Innovación + Desarrollo` · `Marca empleadora` · `Portafolio` · `Otras`
+`Sostenibilidad` · `Excelencia médica` · `Innovación + Desarrollo` · `Marca empleadora` · `Portafolio` · `Obras` · `Otras`
 
 ---
 
