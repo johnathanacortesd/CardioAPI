@@ -1393,6 +1393,60 @@ def generate_output_excel(rows, km):
 
 
 # ======================================
+# Carga defensiva del dossier (repara XML interno dañado de los exports)
+# ======================================
+_CARACTERES_XML_ILEGALES = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f]')
+
+def _reparar_xlsx_en_memoria(raw: bytes) -> bytes:
+    """Reescribe el xlsx saneando caracteres de control ilegales en sus partes XML.
+
+    Algunos exports de plataformas de monitoreo incrustan caracteres de control
+    (\x00-\x1f) dentro del XML interno del .xlsx, lo que hace que openpyxl falle
+    con xml.etree.ElementTree.ParseError. Se eliminan solo esos caracteres.
+    """
+    zin = io.BytesIO(raw)
+    zout = io.BytesIO()
+    with zipfile.ZipFile(zin, 'r') as zf_in, zipfile.ZipFile(zout, 'w', zipfile.ZIP_DEFLATED) as zf_out:
+        for item in zf_in.infolist():
+            data = zf_in.read(item.filename)
+            if item.filename.endswith(('.xml', '.rels')):
+                try:
+                    data = _CARACTERES_XML_ILEGALES.sub('', data.decode('utf-8')).encode('utf-8')
+                except UnicodeDecodeError:
+                    pass
+            zf_out.writestr(item, data)
+    return zout.getvalue()
+
+def cargar_dossier_seguro(df_file):
+    """Abre el dossier con load_workbook de forma defensiva.
+
+    1) Verifica que el archivo sea realmente un .xlsx (contenedor ZIP).
+    2) Intenta la carga normal.
+    3) Si el XML interno viene dañado, intenta repararlo en memoria.
+    4) Si nada funciona, muestra un mensaje accionable en lugar del traceback.
+    """
+    raw = df_file.getvalue() if hasattr(df_file, 'getvalue') else df_file.read()
+    if not raw or raw[:2] != b'PK':
+        st.error("❌ El archivo subido no es un .xlsx válido. Descárgalo de nuevo desde la "
+                 "plataforma, verifica que abra en Excel y vuelve a subirlo.")
+        st.stop()
+    try:
+        return load_workbook(io.BytesIO(raw), data_only=True)
+    except Exception:
+        pass
+    try:
+        wb = load_workbook(io.BytesIO(_reparar_xlsx_en_memoria(raw)), data_only=True)
+        st.warning("⚠️ El dossier venía con el XML interno dañado y se reparó automáticamente. "
+                   "Verifica que el número de noticias leídas sea el esperado.")
+        return wb
+    except Exception:
+        pass
+    st.error("❌ No se pudo leer el dossier: el archivo .xlsx está dañado o incompleto "
+             "(error interno de lectura del Excel). Descárgalo de nuevo desde la plataforma, "
+             "verifica que abra en Excel y vuelve a subirlo.")
+    st.stop()
+
+# ======================================
 # Proceso principal (Análisis Completo - Ejecución síncrona sin asyncio.run)
 # ======================================
 def run_full_process(df_file, bn, ba, tpkl, epkl, mode, xlsx_bytes=None, cliente="", voceros="", enable_scraping=False):
@@ -1415,7 +1469,7 @@ def run_full_process(df_file, bn, ba, tpkl, epkl, mode, xlsx_bytes=None, cliente
             
         region_map, internet_map = load_config(config_path)
         
-        wb_in = load_workbook(df_file, data_only=True)
+        wb_in = cargar_dossier_seguro(df_file)
         df_normalized = read_and_normalize_dossier(wb_in.active, region_map, internet_map)
         
         # Expansión por ; en Menciones - Empresa
