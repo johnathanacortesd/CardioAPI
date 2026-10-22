@@ -475,13 +475,33 @@ def clean_text(text):
         return text
     return html.unescape(text).strip()
 
+def decode_html_entities(text):
+    """Decodifica las entidades HTML de un texto (numéricas hex/dec y con
+    nombre) a su carácter real: "&#x201C;" -> “ , "&#xF3;" -> ó, "&amp;" -> &.
+
+    Solo se convierten las entidades: no se quita, recorta ni reordena
+    nada más del texto. Hasta 3 pasadas por si la entidad viene doblemente
+    codificada ("&amp;#xF3;" -> "&#xF3;" -> "ó").
+    """
+    if not isinstance(text, str):
+        return text
+    out = text
+    for _ in range(3):
+        decoded = html.unescape(out)
+        if decoded == out:
+            break
+        out = decoded
+    return out
+
 def clean_cuerpo(text):
     if not isinstance(text, str) or text.strip() == '':
         return text
-    text = html.unescape(text)
     text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
     text = re.sub(r'<[^>]+>', '', text)
-    return text.strip()
+    # El cuerpo (Resumen - Aclaracion / CuerpoEs) se mantiene exacto: la
+    # única limpieza es decodificar las entidades HTML, igual que en los
+    # títulos. No se quita, recorta ni reordena ninguna palabra.
+    return decode_html_entities(text).strip()
 
 def normalize_title_for_comparison(title):
     """
@@ -506,13 +526,27 @@ def normalize_title_for_comparison(title):
 def clean_title_for_output(title):
     return re.sub(r"\s*\|\s*[\w\s]+$", "", str(title)).strip()
 
+def terminar_en_punto(text):
+    """Deja el texto con un solo punto final (nunca elipsis '...')."""
+    if not isinstance(text, str) or not text.strip():
+        return text
+    return text.rstrip(".") + "."
+
 def corregir_texto(text):
+    """Limpieza de salida del Resumen - Aclaracion.
+
+    El texto se mantiene EXACTO. La versión anterior buscaba la primera
+    letra mayúscula y descartaba todo lo que hubiera antes, así que un
+    resumen que empieza con un número o en minúscula perdía palabras
+    (p. ej. "2026 arranca con ventas récord en Colombia" salía como
+    "Colombia..."), borraba los "[...]" y agregaba "..." al final.
+    Ahora la limpieza es solo decodificar las entidades HTML
+    ("creci&#xF3;" -> "creció"), igual que en los títulos, sin quitar ni
+    recortar ninguna palabra, y el cierre es UN solo punto, nunca tres:
+    `terminar_en_punto`.
+    """
     if not isinstance(text, str): return text
-    text = re.sub(r"(<br>|\[\.\.\.\]|\s+)", " ", text).strip()
-    m = re.search(r"[A-ZÁÉÍÓÚÑ]", text)
-    if m: text = text[m.start():]
-    if text and not text.endswith("..."): text = text.rstrip(".") + "..."
-    return text
+    return terminar_en_punto(decode_html_entities(text).strip())
 
 def normalizar_tipo_medio(tipo_raw):
     if not isinstance(tipo_raw, str): return str(tipo_raw)
@@ -1248,13 +1282,11 @@ def read_and_normalize_dossier(sheet, region_map, internet_map):
     cuerpo_col = 'CuerpoEs' if 'CuerpoEs' in df.columns else 'Resumen - Aclaracion'
     cuerpo_cleaned = df.get(cuerpo_col, pd.Series([''] * len(df))).astype(str).apply(clean_cuerpo)
 
-    def fmt_grafica(text):
-        if not isinstance(text, str) or not text.strip():
-            return text
-        parrafos = [p.strip() for p in text.split('\n') if p.strip()]
-        return '\n\n'.join(parrafos) if len(parrafos) > 1 else text
-
-    df['Resumen - Aclaracion'] = np.where(is_av, cuerpo_cleaned, cuerpo_cleaned.apply(fmt_grafica))
+    # El Resumen - Aclaracion queda tal como viene del cuerpo (solo con
+    # las entidades HTML decodificadas por clean_cuerpo), para todos los
+    # tipos de medio: antes a los medios gráficos se les rearmaban los
+    # párrafos.
+    df['Resumen - Aclaracion'] = cuerpo_cleaned
 
     url_nota_av = df.get('URL Nota AV', df.get('Link Nota AV', pd.Series([''] * len(df))))
     url_streaming = df.get('URL (Streaming - Imagen)', pd.Series([''] * len(df)))
