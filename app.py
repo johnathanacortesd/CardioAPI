@@ -41,14 +41,16 @@ st.set_page_config(
 )
 
 OPENAI_MODEL_EMBEDDING     = "text-embedding-3-small"
-OPENAI_MODEL_CLASIFICACION = "gpt-4.1-nano-2025-04-14"
+# 2026-10-13: gpt-6-luna reemplaza a gpt-4.1-nano-2025-04-14, que OpenAI
+# apaga el 2026-10-23 (verificado en la página de deprecations).
+OPENAI_MODEL_CLASIFICACION = "gpt-6-luna"
 
 CONCURRENT_REQUESTS          = 50
 SIMILARITY_THRESHOLD_TONO    = 0.82
 SIMILARITY_THRESHOLD_TITULOS = 0.93
 
 PRICE_INPUT_1M     = 0.10
-PRICE_OUTPUT_1M    = 0.40
+PRICE_OUTPUT_1M    = 0.50   # gpt-6-luna: $0.10/$0.50 por 1M in/out
 PRICE_EMBEDDING_1M = 0.02
 
 STOPWORDS_ES = set("""

@@ -15,7 +15,7 @@
 
 [![Streamlit](https://img.shields.io/badge/Streamlit-App-FF4B4B?logo=streamlit&logoColor=white)](https://cardio-api.streamlit.app/)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4.1--nano-412991?logo=openai&logoColor=white)](https://openai.com/)
+[![OpenAI](https://img.shields.io/badge/OpenAI-GPT--6--luna-412991?logo=openai&logoColor=white)](https://openai.com/)
 [![Version](https://img.shields.io/badge/version-v18.2-blueviolet)]()
 [![License](https://img.shields.io/badge/License-Privado-lightgrey)]()
 
@@ -59,7 +59,7 @@
 | Framework web            | Streamlit                                   |
 | Procesamiento de datos   | pandas, NumPy                               |
 | Embeddings               | OpenAI `text-embedding-3-small`             |
-| Clasificación             | OpenAI `gpt-4.1-nano`                       |
+| Clasificación             | OpenAI `gpt-6-luna`                         |
 | Clustering semántico      | scikit-learn (`AgglomerativeClustering`, `cosine_similarity`) |
 | Concurrencia              | `concurrent.futures.ThreadPoolExecutor`     |
 | Manejo de Excel            | openpyxl                                    |
